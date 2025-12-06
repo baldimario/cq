@@ -5,10 +5,11 @@
 #include "csv.h"
 #include "csvparser.h"
 #include "utils.h"
+#include "argparser.h"
 
 int main(int argc, char **argv) {
-  if (argc != 2) {
-    fprintf(stderr, "Usage: %s <file_name>\n", argv[0]);
+  if (argc < 2) {
+    printUsage(argv[0]);
     exit(1);
   }
 
@@ -37,7 +38,9 @@ int main(int argc, char **argv) {
 
   CsvFile* csv_file = parseFile(file_buffer);
   
-  printCsvFile(csv_file);
+  if (checkArgFlags(argc, argv, 'p')) {
+    printCsvFile(csv_file);
+  }
 
   free(file_buffer);
   return 0;

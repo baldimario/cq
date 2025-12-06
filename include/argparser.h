@@ -1,0 +1,7 @@
+#ifndef ARGPARSER_H
+#define ARGPARSER_H
+
+void printUsage(char* program_name);
+unsigned char checkArgFlags(int argc, char** argv, char character);
+
+#endif
