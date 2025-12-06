@@ -2,9 +2,11 @@
 
 ### Usage
 ```
-Usage: ./build/cq <file_name> <options>
+sage: ./build/cq <file_name> <options>
 Options:
-  -p    Enable printing of the CSV file
+        -h      Show this help message
+        -p      Enable printing of the CSV file
+        -e      Expression to evaluate
 ```
 
 ### Compile
@@ -15,4 +17,5 @@ make
 ### Run
 ```
     cq test_data.csv -p
+    cq test_data.csv -p -e "..."
 ```
