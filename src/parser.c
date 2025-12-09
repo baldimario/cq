@@ -6,6 +6,7 @@
 
 #include "parser.h"
 #include "tokenizer.h"
+#include "string_utils.h"
 
 
 /* forward prototype declarations */
@@ -473,14 +474,14 @@ static void generate_column_name(ASTNode* node, char* buf, size_t buf_size) {
             for (int i = 0; i < node->function.arg_count; i++) {
                 if (node->function.args[i] == NULL) {
                     // handle NULL argument, it shouldn't happen, but let's be defensive
-                    if (i > 0) strlcat(args_str, ", ", sizeof(args_str));
-                    strlcat(args_str, "NULL", sizeof(args_str));
+                    if (i > 0) cq_strlcat(args_str, ", ", sizeof(args_str));
+                    cq_strlcat(args_str, "NULL", sizeof(args_str));
                     continue;
                 }
                 char arg_buf[128];
                 generate_column_name(node->function.args[i], arg_buf, sizeof(arg_buf));
-                if (i > 0) strlcat(args_str, ", ", sizeof(args_str));
-                strlcat(args_str, arg_buf, sizeof(args_str));
+                if (i > 0) cq_strlcat(args_str, ", ", sizeof(args_str));
+                cq_strlcat(args_str, arg_buf, sizeof(args_str));
             }
             snprintf(buf, buf_size, "%s(%s)", node->function.name, args_str);
             break;

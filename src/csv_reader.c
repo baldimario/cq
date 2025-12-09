@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include "csv_reader.h"
+#include "string_utils.h"
 
 /* CSV configuration used in tests */
 CsvConfig csv_config_default(void) {
@@ -176,7 +177,7 @@ Value parse_value(const char* str, size_t len) {
             value.double_value = strtod(str, NULL);
             break;
         case VALUE_TYPE_STRING:
-            value.string_value = strndup(str, len);
+            value.string_value = cq_strndup(str, len);
             trim_whitespace(value.string_value);
             break;
     }
@@ -264,7 +265,7 @@ static void parse_line(CsvTable* table, const char* line_start, const char* line
         
         for (int i = 0; i < field_count; i++) {
             if (table->has_header && field_lengths[i] > 0) {
-                table->columns[i].name = strndup(fields[i], field_lengths[i]);
+                table->columns[i].name = cq_strndup(fields[i], field_lengths[i]);
                 trim_whitespace(table->columns[i].name);
             } else {
                 // generate column name $0, $1, $2, etc.

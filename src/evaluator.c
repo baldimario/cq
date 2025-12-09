@@ -9,6 +9,7 @@
 #include "evaluator.h"
 #include "parser.h"
 #include "csv_reader.h"
+#include "string_utils.h"
 
 /* global CSV configuration to can be set before calling evaluate_query */
 CsvConfig global_csv_config = {.delimiter = ',', .quote = '"', .has_header = true};
@@ -102,7 +103,7 @@ CsvTable* load_table_from_string(const char* filename) {
     if (*start == '"' || *start == '\'') start++;
     if (end > start && (*(end-1) == '"' || *(end-1) == '\'')) end--;
     
-    char* clean_filename = strndup(start, end - start);
+    char* clean_filename = cq_strndup(start, end - start);
     
     CsvConfig config = global_csv_config;
     CsvTable* table = csv_load(clean_filename, config);
@@ -141,7 +142,7 @@ Value* resolve_column(QueryContext* ctx, const char* column_name, Row* current_r
         
         // if not found, try traditional resolution for table alias lookup
         size_t alias_len = dot - column_name;
-        char* table_alias = strndup(column_name, alias_len);
+        char* table_alias = cq_strndup(column_name, alias_len);
         const char* col_name = dot + 1;
         
         // find the table
@@ -619,7 +620,7 @@ static void trim_trailing_spaces(char* str) {
 
 /* helper to extract alias from column spec (part after AS keyword) */
 static char* extract_column_alias(const char* col_spec) {
-    const char* as_pos = strcasestr(col_spec, " AS ");
+    const char* as_pos = cq_strcasestr(col_spec, " AS ");
     if (as_pos) {
         return strdup(as_pos + 4);
     }
@@ -778,7 +779,7 @@ static Value evaluate_column_expression(const char* col_spec, QueryContext* ctx,
     col_spec_clean[sizeof(col_spec_clean) - 1] = '\0';
     
     // remove " AS alias" part
-    char* as_pos = (char*)strcasestr(col_spec_clean, " AS ");
+    char* as_pos = (char*)cq_strcasestr(col_spec_clean, " AS ");
     if (as_pos) *as_pos = '\0';
     
     // check if it's a function call
@@ -1547,7 +1548,7 @@ static ResultSet* build_aggregated_result(QueryContext* ctx, GroupResult* groups
             char* alias = extract_column_alias(col_spec);
             if (alias) {
                 // find " AS " in the original string to extract the expression part
-                const char* as_pos = strcasestr(col_spec, " AS ");
+                const char* as_pos = cq_strcasestr(col_spec, " AS ");
                 if (as_pos) {
                     int col_len = as_pos - col_spec;
                     strncpy(col_name, col_spec, col_len);
@@ -2007,7 +2008,7 @@ static void sort_result(ResultSet* result, ASTNode* select_node, const char* col
             char expr_buf[256];
             char* alias = extract_column_alias(col_spec);
             if (alias) {
-                const char* as_pos = strcasestr(col_spec, " AS ");
+                const char* as_pos = cq_strcasestr(col_spec, " AS ");
                 int len = as_pos - col_spec;
                 strncpy(expr_buf, col_spec, len);
                 expr_buf[len] = '\0';

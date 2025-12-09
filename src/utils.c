@@ -1,9 +1,89 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include "csv_reader.h"
 #include "evaluator.h"
+#include "string_utils.h"
 #include "utils.h"
+
+
+/* Portable string functions for cross-platform compatibility */
+
+/* 
+ * cq_strndup - duplicate a string with length limit
+ * Not available on Windows and some older systems
+ */
+char* cq_strndup(const char* s, size_t n) {
+    if (!s) return NULL;
+    
+    size_t len = 0;
+    while (len < n && s[len] != '\0') {
+        len++;
+    }
+    
+    char* result = (char*)malloc(len + 1);
+    if (!result) return NULL;
+    
+    memcpy(result, s, len);
+    result[len] = '\0';
+    return result;
+}
+
+/*
+ * cq_strlcat - size-bounded string concatenation
+ * BSD-specific, not available on Linux/Windows
+ * Returns the total length of the string it tried to create
+ */
+size_t cq_strlcat(char* dst, const char* src, size_t size) {
+    if (!dst || !src || size == 0) {
+        return src ? strlen(src) : 0;
+    }
+    
+    size_t dst_len = strlen(dst);
+    size_t src_len = strlen(src);
+    
+    if (dst_len >= size) {
+        return size + src_len;
+    }
+    
+    size_t copy_len = size - dst_len - 1;
+    if (src_len < copy_len) {
+        copy_len = src_len;
+    }
+    
+    memcpy(dst + dst_len, src, copy_len);
+    dst[dst_len + copy_len] = '\0';
+    
+    return dst_len + src_len;
+}
+
+/*
+ * cq_strcasestr - case-insensitive substring search
+ * GNU extension, not available on Windows or BSD by default
+ */
+char* cq_strcasestr(const char* haystack, const char* needle) {
+    if (!haystack || !needle) return NULL;
+    if (*needle == '\0') return (char*)haystack;
+    
+    size_t needle_len = strlen(needle);
+    
+    for (; *haystack != '\0'; haystack++) {
+        if (tolower((unsigned char)*haystack) == tolower((unsigned char)*needle)) {
+            size_t i;
+            for (i = 1; i < needle_len; i++) {
+                if (tolower((unsigned char)haystack[i]) != tolower((unsigned char)needle[i])) {
+                    break;
+                }
+            }
+            if (i == needle_len) {
+                return (char*)haystack;
+            }
+        }
+    }
+    
+    return NULL;
+}
 
 
 /* function to skip whitespace characters in the input string
