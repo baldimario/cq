@@ -1,3 +1,4 @@
-.vscode
-cq
+data/bigdata.csv
 obj
+build
+output.csv
