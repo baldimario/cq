@@ -46,7 +46,7 @@ int main(int argc, char* argv[]) {
                 break;
             case 'v':
                 vertical_output = true;
-                print_table = true;  // implicito
+                print_table = true;  // implicit
                 break;
             default:
                 print_help(argv[0]);

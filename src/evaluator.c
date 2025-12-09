@@ -228,8 +228,8 @@ Value evaluate_expression(QueryContext* ctx, ASTNode* expr, Row* current_row, in
             // validation only in scalar context (not for IN operator)
             // IN operator is handled separately and allows multi-row results
             if (subquery_result->row_count != 1 || subquery_result->column_count != 1) {
-                // Only report error if it's truly being used as scalar
-                // Don't report for IN operator which is handled elsewhere
+                // only report error if it's truly being used as scalar
+                // don't report for IN operator which is handled elsewhere
                 csv_free(subquery_result);
                 break;
             }
