@@ -1,0 +1,11 @@
+id,name,age,role,height,active,email,city
+1,Alice,25,admin,165.50,1,alice@example.com,NYC
+2,Bob,30,user,178.20,1,bob@gmail.com,Boston
+3,Charlie,35,moderator,172.00,0,charlie@company.com,NYC
+4,David,28,user,180.50,1,david@example.com,Seattle
+5,Eve,42,admin,168.30,1,eve@example.com,NYC
+6,Frank,22,user,175.00,0,frank@gmail.com,Boston
+7,Grace,33,moderator,170.00,1,grace@company.com,Seattle
+8,Henry,45,admin,182.00,1,henry@example.com,Boston
+9,Alice Smith,29,user,167.00,1,asmith@gmail.com,NYC
+10,John,31,user,176.50,1,john@example.com,Seattle

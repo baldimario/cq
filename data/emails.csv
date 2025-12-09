@@ -1,0 +1,6 @@
+id,user_id,email,verified
+1,1,alice@work.com,1
+2,2,bob@personal.com,1
+3,3,charlie@work.com,0
+4,5,eve@work.com,1
+5,7,grace@personal.com,1
