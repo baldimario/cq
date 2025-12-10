@@ -2,3 +2,4 @@ data/bigdata.csv
 obj
 build
 output.csv
+.DS_Store

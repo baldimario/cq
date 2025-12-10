@@ -1,15 +1,20 @@
 # cq - High-Performance SQL Query Engine for CSV Files
 
+[![Build and Test](https://github.com/iworokonit/cq/workflows/Build%20and%20Test%20on%20Multiple%20Platforms/badge.svg)](https://github.com/iworokonit/cq/actions)
+
 A lightweight, fast SQL query processor written in C that enables executing SQL queries directly on CSV files without requiring a database. Features include joins, subqueries, aggregations, arithmetic expressions, and more.
+
+![cq in action](assets/cq.png)
 
 ## Quick Start
 
 ```bash
-# Build the project
-make
+# Install (no Make required)
+./install.sh   # Unix-like
+install.bat    # Windows
 
 # Run a query
-cq -q "SELECT name, age FROM data.csv WHERE age > 25" -p
+./build/cq -q "SELECT name, age FROM data.csv WHERE age > 25" -p
 
 # Save results to CSV
 cq -q "SELECT * FROM data.csv WHERE role = 'admin'" -o output.csv
@@ -21,11 +26,36 @@ cq -q "SELECT * FROM data.csv WHERE age > 30" -c
 ## Installation
 
 ### Prerequisites
+
+**Unix-like (Linux, macOS):**
 - C compiler (GCC or Clang)
 - Make
 - Standard C library
 
+**Linux ARM64 (Raspberry Pi):**
+- GCC for ARM64 (`gcc-aarch64-linux-gnu` for cross-compilation)
+- Or native GCC on Raspberry Pi OS 64-bit
+- Make
+- Standard C library
+
+**Windows:**
+- Visual Studio Build Tools (MSVC) or MinGW
+- Standard C library
+
 ### Build Commands
+
+**Quick Install (no Make required):**
+```bash
+# Unix-like (Linux, macOS, BSD)
+./install.sh
+
+# Windows (MSVC)
+install.bat
+```
+
+**Using Make:**
+
+**Unix-like (Linux, macOS):**
 ```bash
 # Build the main executable
 make
@@ -35,6 +65,35 @@ make test
 
 # Clean build artifacts
 make clean
+```
+
+**Windows (MSVC):**
+```cmd
+# Build using the provided batch script
+install.bat
+
+# Or manually with MSVC
+cl.exe /W3 /O2 /Iinclude src\*.c /Febuild\cq.exe
+```
+
+**Windows (MinGW/Git Bash):**
+```bash
+# Use standard Unix Makefile or install script
+make
+# or
+./install.sh
+```
+
+**Raspberry Pi (ARM64):**
+```bash
+# Native build on Raspberry Pi
+./install.sh
+# or
+make
+
+# Cross-compile from x86_64 Linux
+sudo apt-get install gcc-aarch64-linux-gnu
+make CC=aarch64-linux-gnu-gcc
 ```
 
 ## Features
@@ -652,7 +711,7 @@ make address_sanitizer
 - Clear variable names
 - Comments for complex logic
 
-## 🎓 Technical Details
+## Technical Details
 
 ### Compiler Compatibility
 - GCC 4.8+
