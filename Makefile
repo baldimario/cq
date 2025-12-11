@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := all
 CC := cc
 CFLAGS := -Wall -W -O2 -Iinclude
-LDFLAGS :=
+LDFLAGS := -lm
 
 SRC_DIR := src
 OBJ_DIR := obj
