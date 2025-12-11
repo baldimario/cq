@@ -11,7 +11,7 @@ fn buildFor(b: *std.Build, trg: ?std.Target.Query, allocator: std.mem.Allocator)
     try addCFilesFromDir(b, exe, "../src");
     // TODO: resolve sub-directory at more level too
     try addCFilesFromDir(b, exe, "../src/external/");
-    const install_prefix = try std.fmt.allocPrint(allocator, "{}-{}", .{ target.result.os.tag, target.result.cpu.arch });
+    const install_prefix = try std.fmt.allocPrint(allocator, "{}-{}", .{ target.result.cpu.arch, target.result.os.tag });
     std.debug.print("{s}", .{install_prefix});
     //defer allocator.free(install_prefix);
     const art = b.addInstallArtifact(exe, .{});

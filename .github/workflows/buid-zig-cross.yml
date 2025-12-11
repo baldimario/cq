@@ -21,7 +21,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cq-aarch64-linux
-          path: ./zig/zig-out/.linux-aarch64
+          path: ./zig/zig-out/.linux-.aarch64
       - name: Build with zig for x86_64-linux 
         working-directory: ./zig
         run: zig build -Dtarget=x86_64-linux
@@ -29,7 +29,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cq-aarch64-linux
-          path: ./zig/zig-out/.linux-aarch64
+          path: ./zig/zig-out/.linux-.aarch64
       - name: Build with zig for x86_64-windows 
         working-directory: ./zig
         run: zig build -Dtarget=x86_64-windows 
@@ -37,7 +37,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cq-x86_64-windows
-          path: ./zig/zig-out/.x86_64-windows
+          path: ./zig/zig-out/.x86_64-.windows
 
       - name: Build with zig for aarch64-macos 
         working-directory: ./zig
@@ -46,7 +46,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cq-aarch64-macos
-          path: ./zig/zig-out/.aarch64-macos
+          path: ./zig/zig-out/.aarch64-.macos
       - name: Build with zig for x86_64-macos
         working-directory: ./zig
         run: zig build -Dtarget=x86_64-macos
@@ -54,4 +54,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cq-aarch64-linux
-          path: ./zig/zig-out/.x86_64-macos
+          path: ./zig/zig-out/.x86_64-.macos
