@@ -1,0 +1,22 @@
+name: Build and Test on Multiple Platforms
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: Build zig
+    steps:
+      - uses: actions/checkout@v3
+      - uses: mlugg/setup-zig@v2
+      - name: Build with zig for aarch64-linux 
+        working-directory: ./zig
+        run: zig build -Dtarget=aarch64-linux
+      - name: Build with zig for x86_64-windows 
+        working-directory: ./zig
+        run: zig build -Dtarget=x86_64-windows 
