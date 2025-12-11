@@ -1677,7 +1677,7 @@ ResultSet* build_result(QueryContext* ctx, Row** filtered_rows, int row_count) {
                 // parse column name for display
                 const char* col_spec = select_node->select.columns[i];
                 char col_name[256];
-                const char* as_pos = strcasestr(col_spec, " AS ");
+                const char* as_pos = cq_strcasestr(col_spec, " AS ");
                 if (as_pos) {
                     const char* alias_start = as_pos + 4;
                     result->columns[col_idx].name = strdup(alias_start);
@@ -1783,7 +1783,7 @@ ResultSet* build_result(QueryContext* ctx, Row** filtered_rows, int row_count) {
         char* alias = extract_column_alias(col_spec);
         if (alias) {
             // extract column name
-            const char* as_pos = strcasestr(col_spec, " AS ");
+            const char* as_pos = cq_strcasestr(col_spec, " AS ");
             int col_len = as_pos - col_spec;
             strncpy(col_name, col_spec, col_len);
             col_name[col_len] = '\0';
