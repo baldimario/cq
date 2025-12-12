@@ -65,3 +65,7 @@ jobs:
         with:
           name: cq_Window-x86_64
           path: zig/zig-out/windows-x86_64/
+          
+  test:
+    runs-on: jobs.build
+    
