@@ -104,6 +104,39 @@ void releaseNode(ASTNode* node) {
             releaseNode(node->set_op.left);
             releaseNode(node->set_op.right);
             break;
+        case NODE_TYPE_INSERT:
+            free(node->insert.table);
+            if (node->insert.columns) {
+                for (int i = 0; i < node->insert.column_count; i++) {
+                    free(node->insert.columns[i]);
+                }
+                free(node->insert.columns);
+            }
+            if (node->insert.values) {
+                for (int i = 0; i < node->insert.value_count; i++) {
+                    releaseNode(node->insert.values[i]);
+                }
+                free(node->insert.values);
+            }
+            break;
+        case NODE_TYPE_UPDATE:
+            free(node->update.table);
+            if (node->update.assignments) {
+                for (int i = 0; i < node->update.assignment_count; i++) {
+                    releaseNode(node->update.assignments[i]);
+                }
+                free(node->update.assignments);
+            }
+            releaseNode(node->update.where);
+            break;
+        case NODE_TYPE_DELETE:
+            free(node->delete_stmt.table);
+            releaseNode(node->delete_stmt.where);
+            break;
+        case NODE_TYPE_ASSIGNMENT:
+            free(node->assignment.column);
+            releaseNode(node->assignment.value);
+            break;
         case NODE_TYPE_LITERAL:
             free(node->literal);
             break;
@@ -1149,7 +1182,19 @@ static void parse_limit_offset(Parser* parser, int* limit, int* offset) {
  * Handles SELECT, FROM, JOINs, WHERE, GROUP BY, HAVING, ORDER BY, LIMIT/OFFSET
  */
 static ASTNode* parse_query_internal(Parser* parser) {
-    // create root query node to hold all clauses
+    // Check for INSERT, UPDATE, DELETE first
+    Token* first = parser_current_token(parser);
+    if (first->type == TOKEN_TYPE_KEYWORD) {
+        if (strcasecmp(first->value, "INSERT") == 0) {
+            return parse_insert(parser);
+        } else if (strcasecmp(first->value, "UPDATE") == 0) {
+            return parse_update(parser);
+        } else if (strcasecmp(first->value, "DELETE") == 0) {
+            return parse_delete(parser);
+        }
+    }
+    
+    // create root query node to hold all clauses (SELECT)
     ASTNode* root = create_node(NODE_TYPE_QUERY);
     root->query.joins = NULL;
     root->query.join_count = 0;
@@ -1369,8 +1414,275 @@ void printAst(ASTNode* node, int depth) {
                 printAst(node->list.nodes[i], depth + 1);
             }
             break;
+        case NODE_TYPE_INSERT:
+            printf("INSERT INTO: %s\n", node->insert.table);
+            if (node->insert.columns) {
+                print_indent(depth + 1);
+                printf("COLUMNS: ");
+                for (int i = 0; i < node->insert.column_count; i++) {
+                    printf("%s%s", i > 0 ? ", " : "", node->insert.columns[i]);
+                }
+                printf("\n");
+            }
+            print_indent(depth + 1);
+            printf("VALUES:\n");
+            for (int i = 0; i < node->insert.value_count; i++) {
+                printAst(node->insert.values[i], depth + 2);
+            }
+            break;
+        case NODE_TYPE_UPDATE:
+            printf("UPDATE: %s\n", node->update.table);
+            print_indent(depth + 1);
+            printf("SET:\n");
+            for (int i = 0; i < node->update.assignment_count; i++) {
+                printAst(node->update.assignments[i], depth + 2);
+            }
+            if (node->update.where) {
+                print_indent(depth + 1);
+                printf("WHERE:\n");
+                printAst(node->update.where, depth + 2);
+            }
+            break;
+        case NODE_TYPE_DELETE:
+            printf("DELETE FROM: %s\n", node->delete_stmt.table);
+            if (node->delete_stmt.where) {
+                print_indent(depth + 1);
+                printf("WHERE:\n");
+                printAst(node->delete_stmt.where, depth + 2);
+            }
+            break;
+        case NODE_TYPE_ASSIGNMENT:
+            printf("ASSIGN: %s = ", node->assignment.column);
+            if (node->assignment.value) {
+                printAst(node->assignment.value, depth);
+            }
+            break;
         default:
             printf("UNKNOWN NODE (type=%d)\n", node->type);
             break;
     }
 }
+
+/* parse INSERT INTO table (columns) VALUES (values) */
+ASTNode* parse_insert(Parser* parser) {
+    // INSERT keyword already verified by caller, just advance
+    parser_advance(parser);
+    
+    // INTO (parser_expect already advances past it)
+    if (!parser_expect(parser, TOKEN_TYPE_KEYWORD, "INTO")) {
+        fprintf(stderr, "Error: Expected INTO after INSERT\n");
+        return NULL;
+    }
+    
+    // table name can be quoted path like './data/test.csv'
+    Token* table_token = parser_current_token(parser);
+    if (table_token->type != TOKEN_TYPE_IDENTIFIER && table_token->type != TOKEN_TYPE_LITERAL) {
+        fprintf(stderr, "Error: Expected table name after INTO\n");
+        return NULL;
+    }
+    
+    ASTNode* node = create_node(NODE_TYPE_INSERT);
+    node->insert.table = strdup(table_token->value);
+    node->insert.columns = NULL;
+    node->insert.column_count = 0;
+    parser_advance(parser);
+    
+    // optional column list: (col1, col2, col3)
+    if (parser_match(parser, TOKEN_TYPE_PUNCTUATION, "(")) {
+        parser_advance(parser);
+        
+        int capacity = 4;
+        node->insert.columns = malloc(sizeof(char*) * capacity);
+        
+        while (1) {
+            Token* col = parser_current_token(parser);
+            if (col->type != TOKEN_TYPE_IDENTIFIER) {
+                fprintf(stderr, "Error: Expected column name in INSERT column list\n");
+                releaseNode(node);
+                return NULL;
+            }
+            
+            if (node->insert.column_count >= capacity) {
+                capacity *= 2;
+                node->insert.columns = realloc(node->insert.columns, sizeof(char*) * capacity);
+            }
+            
+            node->insert.columns[node->insert.column_count++] = strdup(col->value);
+            parser_advance(parser);
+            
+            if (parser_match(parser, TOKEN_TYPE_PUNCTUATION, ",")) {
+                parser_advance(parser);
+            } else {
+                break;
+            }
+        }
+        
+        if (!parser_expect(parser, TOKEN_TYPE_PUNCTUATION, ")")) {
+            fprintf(stderr, "Error: Expected ')' after column list\n");
+            releaseNode(node);
+            return NULL;
+        }
+    }
+    
+    // VALUES (parser_expect already advances)
+    if (!parser_expect(parser, TOKEN_TYPE_KEYWORD, "VALUES")) {
+        fprintf(stderr, "Error: Expected VALUES in INSERT statement\n");
+        releaseNode(node);
+        return NULL;
+    }
+    
+    // (value1, value2, value3) (parser_expect already advances)
+    if (!parser_expect(parser, TOKEN_TYPE_PUNCTUATION, "(")) {
+        fprintf(stderr, "Error: Expected '(' after VALUES\n");
+        releaseNode(node);
+        return NULL;
+    }
+    
+    int capacity = 4;
+    node->insert.values = malloc(sizeof(ASTNode*) * capacity);
+    node->insert.value_count = 0;
+    
+    while (1) {
+        ASTNode* value = parse_expression(parser);
+        if (!value) {
+            fprintf(stderr, "Error: Expected value in VALUES list\n");
+            releaseNode(node);
+            return NULL;
+        }
+        
+        if (node->insert.value_count >= capacity) {
+            capacity *= 2;
+            node->insert.values = realloc(node->insert.values, sizeof(ASTNode*) * capacity);
+        }
+        
+        node->insert.values[node->insert.value_count++] = value;
+        
+        if (parser_match(parser, TOKEN_TYPE_PUNCTUATION, ",")) {
+            parser_advance(parser);
+        } else {
+            break;
+        }
+    }
+    
+    if (!parser_expect(parser, TOKEN_TYPE_PUNCTUATION, ")")) {
+        fprintf(stderr, "Error: Expected ')' after VALUES list\n");
+        releaseNode(node);
+        return NULL;
+    }
+    
+    return node;
+}
+
+/* parse UPDATE table SET col1=val1, col2=val2 WHERE condition */
+ASTNode* parse_update(Parser* parser) {
+    // UPDATE keyword already verified by caller, just advance
+    parser_advance(parser);
+    
+    // table name
+    Token* table_token = parser_current_token(parser);
+    if (table_token->type != TOKEN_TYPE_IDENTIFIER && table_token->type != TOKEN_TYPE_LITERAL) {
+        fprintf(stderr, "Error: Expected table name after UPDATE\n");
+        return NULL;
+    }
+    
+    ASTNode* node = create_node(NODE_TYPE_UPDATE);
+    node->update.table = strdup(table_token->value);
+    node->update.assignments = NULL;
+    node->update.assignment_count = 0;
+    node->update.where = NULL;
+    parser_advance(parser);
+    
+    // SET (parser_expect already advances)
+    if (!parser_expect(parser, TOKEN_TYPE_KEYWORD, "SET")) {
+        fprintf(stderr, "Error: Expected SET after table name in UPDATE\n");
+        releaseNode(node);
+        return NULL;
+    }
+    
+    // parse assignments col1=val1, col2=val2
+    int capacity = 4;
+    node->update.assignments = malloc(sizeof(ASTNode*) * capacity);
+    
+    while (1) {
+        Token* col = parser_current_token(parser);
+        if (col->type != TOKEN_TYPE_IDENTIFIER) {
+            fprintf(stderr, "Error: Expected column name in SET clause\n");
+            releaseNode(node);
+            return NULL;
+        }
+        
+        ASTNode* assignment = create_node(NODE_TYPE_ASSIGNMENT);
+        assignment->assignment.column = strdup(col->value);
+        parser_advance(parser);
+        
+        // = (parser_expect already advances)
+        if (!parser_expect(parser, TOKEN_TYPE_OPERATOR, "=")) {
+            fprintf(stderr, "Error: Expected '=' in assignment\n");
+            releaseNode(assignment);
+            releaseNode(node);
+            return NULL;
+        }
+        
+        // value
+        assignment->assignment.value = parse_expression(parser);
+        if (!assignment->assignment.value) {
+            fprintf(stderr, "Error: Expected value in assignment\n");
+            releaseNode(assignment);
+            releaseNode(node);
+            return NULL;
+        }
+        
+        if (node->update.assignment_count >= capacity) {
+            capacity *= 2;
+            node->update.assignments = realloc(node->update.assignments, sizeof(ASTNode*) * capacity);
+        }
+        
+        node->update.assignments[node->update.assignment_count++] = assignment;
+        
+        if (parser_match(parser, TOKEN_TYPE_PUNCTUATION, ",")) {
+            parser_advance(parser);
+        } else {
+            break;
+        }
+    }
+    
+    // optional WHERE
+    node->update.where = parse_where(parser);
+    
+    return node;
+}
+
+/* parse DELETE FROM table WHERE condition */
+ASTNode* parse_delete(Parser* parser) {
+    // DELETE keyword already verified by caller, just advance
+    parser_advance(parser);
+    
+    // FROM (parser_expect already advances)
+    if (!parser_expect(parser, TOKEN_TYPE_KEYWORD, "FROM")) {
+        fprintf(stderr, "Error: Expected FROM after DELETE\n");
+        return NULL;
+    }
+    
+    // table name
+    Token* table_token = parser_current_token(parser);
+    if (table_token->type != TOKEN_TYPE_IDENTIFIER && table_token->type != TOKEN_TYPE_LITERAL) {
+        fprintf(stderr, "Error: Expected table name after FROM\n");
+        return NULL;
+    }
+    
+    ASTNode* node = create_node(NODE_TYPE_DELETE);
+    node->delete_stmt.table = strdup(table_token->value);
+    node->delete_stmt.where = NULL;
+    parser_advance(parser);
+    
+    // WHERE, required for safety, we don't allow DELETE without WHERE
+    node->delete_stmt.where = parse_where(parser);
+    if (!node->delete_stmt.where) {
+        fprintf(stderr, "Error: WHERE clause is required for DELETE (safety measure)\n");
+        releaseNode(node);
+        return NULL;
+    }
+    
+    return node;
+}
+

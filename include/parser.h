@@ -22,6 +22,10 @@ typedef enum {
     NODE_TYPE_SUBQUERY,
     NODE_TYPE_BINARY_OP,
     NODE_TYPE_SET_OP,
+    NODE_TYPE_INSERT,
+    NODE_TYPE_UPDATE,
+    NODE_TYPE_DELETE,
+    NODE_TYPE_ASSIGNMENT,
 } ASTNodeType;
 
 typedef enum {
@@ -116,6 +120,31 @@ struct ASTNode {
             ASTNode* right;  // right query
         } set_op;
 
+        struct {
+            char* table;           // target CSV file
+            char** columns;        // column names (NULL if not specified)
+            int column_count;
+            ASTNode** values;      // values to insert
+            int value_count;
+        } insert;
+
+        struct {
+            char* table;           // target CSV file
+            ASTNode** assignments; // array of ASSIGNMENT nodes
+            int assignment_count;
+            ASTNode* where;        // WHERE condition (optional)
+        } update;
+
+        struct {
+            char* table;           // target CSV file
+            ASTNode* where;        // WHERE condition (required for safety)
+        } delete_stmt;
+
+        struct {
+            char* column;          // column name
+            ASTNode* value;        // value to assign
+        } assignment;
+
         char* literal;
         char* identifier;
         char* alias;
@@ -156,6 +185,9 @@ ASTNode* parse_order_by(Parser* parser);
 ASTNode* parse_expression(Parser* parser);
 ASTNode* parse_condition(Parser* parser);
 ASTNode* parse_primary(Parser* parser);
+ASTNode* parse_insert(Parser* parser);
+ASTNode* parse_update(Parser* parser);
+ASTNode* parse_delete(Parser* parser);
 void printAst(ASTNode* node, int depth);
 
 #endif

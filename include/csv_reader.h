@@ -66,6 +66,9 @@ CsvConfig csv_config_default(void);
 /* load CSV file into memory using mmap */
 CsvTable* csv_load(const char* filename, CsvConfig config);
 
+/* save CSV table to file */
+bool csv_save(const char* filename, CsvTable* table);
+
 /* free CSV table */
 void csv_free(CsvTable* table);
 

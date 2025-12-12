@@ -468,3 +468,99 @@ void csv_print_table_vertical(CsvTable* table, int max_rows) {
         printf("... (%d more rows)\n", table->row_count - max_rows);
     }
 }
+
+/* save CSV table to file */
+bool csv_save(const char* filename, CsvTable* table) {
+    FILE* f = fopen(filename, "w");
+    if (!f) {
+        perror("fopen");
+        return false;
+    }
+    
+    // write header
+    if (table->has_header) {
+        for (int i = 0; i < table->column_count; i++) {
+            if (i > 0) fprintf(f, "%c", table->delimiter);
+            
+            // check if column name needs quoting, it contains delimiter, quote, or newline
+            const char* col_name = table->columns[i].name;
+            bool needs_quote = false;
+            for (const char* p = col_name; *p; p++) {
+                if (*p == table->delimiter || *p == table->quote || *p == '\n' || *p == '\r') {
+                    needs_quote = true;
+                    break;
+                }
+            }
+            
+            if (needs_quote) {
+                fprintf(f, "%c", table->quote);
+                for (const char* p = col_name; *p; p++) {
+                    if (*p == table->quote) {
+                        fprintf(f, "%c%c", table->quote, table->quote); // escape quote
+                    } else {
+                        fprintf(f, "%c", *p);
+                    }
+                }
+                fprintf(f, "%c", table->quote);
+            } else {
+                fprintf(f, "%s", col_name);
+            }
+        }
+        fprintf(f, "\n");
+    }
+    
+    // write rows
+    for (int row = 0; row < table->row_count; row++) {
+        for (int col = 0; col < table->rows[row].column_count && col < table->column_count; col++) {
+            if (col > 0) fprintf(f, "%c", table->delimiter);
+            
+            Value* val = &table->rows[row].values[col];
+            
+            switch (val->type) {
+                case VALUE_TYPE_NULL:
+                    // write nothing (empty field)
+                    break;
+                    
+                case VALUE_TYPE_INTEGER:
+                    fprintf(f, "%lld", val->int_value);
+                    break;
+                    
+                case VALUE_TYPE_DOUBLE:
+                    fprintf(f, "%.15g", val->double_value);
+                    break;
+                    
+                case VALUE_TYPE_STRING: {
+                    // check if string needs quoting
+                    bool needs_quote = false;
+                    const char* str = val->string_value;
+                    for (const char* p = str; *p; p++) {
+                        if (*p == table->delimiter || *p == table->quote || *p == '\n' || *p == '\r') {
+                            needs_quote = true;
+                            break;
+                        }
+                    }
+                    
+                    if (needs_quote) {
+                        fprintf(f, "%c", table->quote);
+                        for (const char* p = str; *p; p++) {
+                            if (*p == table->quote) {
+                                fprintf(f, "%c%c", table->quote, table->quote);
+                            } else {
+                                fprintf(f, "%c", *p);
+                            }
+                        }
+                        fprintf(f, "%c", table->quote);
+                    } else {
+                        fprintf(f, "%s", str);
+                    }
+                    break;
+                }
+            }
+        }
+        fprintf(f, "\n");
+    }
+    
+    fclose(f);
+    return true;
+}
+

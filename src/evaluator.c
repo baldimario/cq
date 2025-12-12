@@ -22,6 +22,9 @@ static bool match_pattern(const char* str, const char* pattern, bool case_sensit
 static ResultSet* set_union(ResultSet* left, ResultSet* right, bool include_duplicates);
 static ResultSet* set_intersect(ResultSet* left, ResultSet* right);
 static ResultSet* set_except(ResultSet* left, ResultSet* right);
+static ResultSet* evaluate_insert(ASTNode* insert_node);
+static ResultSet* evaluate_update(ASTNode* update_node);
+static ResultSet* evaluate_delete(ASTNode* delete_node);
 
 /* pattern matching for LIKE and ILIKE operators
  * supports % (any sequence) and _ (single character)
@@ -2768,6 +2771,15 @@ static ResultSet* evaluate_query_internal(ASTNode* query_ast, Row* outer_row, Cs
 ResultSet* evaluate_query(ASTNode* query_ast) {
     if (!query_ast) return NULL;
     
+    // handle DML statements (INSERT, UPDATE, DELETE)
+    if (query_ast->type == NODE_TYPE_INSERT) {
+        return evaluate_insert(query_ast);
+    } else if (query_ast->type == NODE_TYPE_UPDATE) {
+        return evaluate_update(query_ast);
+    } else if (query_ast->type == NODE_TYPE_DELETE) {
+        return evaluate_delete(query_ast);
+    }
+    
     // handle set operations (UNION, INTERSECT, EXCEPT)
     if (query_ast->type == NODE_TYPE_SET_OP) {
         ResultSet* left = evaluate_query(query_ast->set_op.left);
@@ -2811,3 +2823,310 @@ ResultSet* evaluate_query(ASTNode* query_ast) {
     
     return evaluate_query_internal(query_ast, NULL, NULL);
 }
+
+/* evaluate INSERT statement */
+static ResultSet* evaluate_insert(ASTNode* insert_node) {
+    // load existing table
+    CsvTable* table = load_table_from_string(insert_node->insert.table);
+    if (!table) {
+        fprintf(stderr, "Error: Could not load table '%s'\n", insert_node->insert.table);
+        return NULL;
+    }
+    
+    // validate column count
+    int value_count = insert_node->insert.value_count;
+    if (insert_node->insert.columns) {
+        // column list specified
+        if (insert_node->insert.column_count != value_count) {
+            fprintf(stderr, "Error: Column count (%d) does not match value count (%d)\n",
+                    insert_node->insert.column_count, value_count);
+            csv_free(table);
+            return NULL;
+        }
+    } else {
+        // no column list, values must match all columns
+        if (value_count != table->column_count) {
+            fprintf(stderr, "Error: Value count (%d) does not match table column count (%d)\n",
+                    value_count, table->column_count);
+            csv_free(table);
+            return NULL;
+        }
+    }
+    
+    // create new row
+    Row new_row;
+    new_row.column_count = table->column_count;
+    new_row.values = calloc(table->column_count, sizeof(Value));
+    
+    // initialize all values as NULL
+    for (int i = 0; i < table->column_count; i++) {
+        new_row.values[i].type = VALUE_TYPE_NULL;
+    }
+    
+    // fill in values
+    for (int i = 0; i < value_count; i++) {
+        int target_col = i;
+        
+        // if column list specified, find target column index
+        if (insert_node->insert.columns) {
+            const char* col_name = insert_node->insert.columns[i];
+            target_col = csv_get_column_index(table, col_name);
+            if (target_col < 0) {
+                fprintf(stderr, "Error: Column '%s' not found in table\n", col_name);
+                free(new_row.values);
+                csv_free(table);
+                return NULL;
+            }
+        }
+        
+        // evaluate value expression
+        ASTNode* val_node = insert_node->insert.values[i];
+        
+        // for simple literals, convert directly
+        if (val_node->type == NODE_TYPE_LITERAL) {
+            const char* literal = val_node->literal;
+            Value parsed = parse_value(literal, strlen(literal));
+            new_row.values[target_col] = parsed;
+        } else if (val_node->type == NODE_TYPE_BINARY_OP) {
+            // evaluate arithmetic expression
+            QueryContext temp_ctx = {0};
+            Value result = evaluate_expression(&temp_ctx, val_node, NULL, 0);
+            new_row.values[target_col] = result;
+        } else {
+            fprintf(stderr, "Error: Unsupported value expression in INSERT\n");
+            free(new_row.values);
+            csv_free(table);
+            return NULL;
+        }
+    }
+    
+    // add row to table
+    if (table->row_count >= table->row_capacity) {
+        table->row_capacity = table->row_capacity ? table->row_capacity * 2 : 8;
+        table->rows = realloc(table->rows, sizeof(Row) * table->row_capacity);
+    }
+    table->rows[table->row_count++] = new_row;
+    
+    // save table back to file
+    if (!csv_save(insert_node->insert.table, table)) {
+        fprintf(stderr, "Error: Could not save table '%s'\n", insert_node->insert.table);
+        csv_free(table);
+        return NULL;
+    }
+    
+    // return result message
+    ResultSet* result = malloc(sizeof(ResultSet));
+    result->filename = strdup("INSERT result");
+    result->data = NULL;
+    result->file_size = 0;
+    result->fd = -1;
+    result->column_count = 1;
+    result->columns = malloc(sizeof(Column));
+    result->columns[0].name = strdup("message");
+    result->columns[0].inferred_type = VALUE_TYPE_STRING;
+    result->row_count = 1;
+    result->row_capacity = 1;
+    result->rows = malloc(sizeof(Row));
+    result->rows[0].column_count = 1;
+    result->rows[0].values = malloc(sizeof(Value));
+    result->rows[0].values[0].type = VALUE_TYPE_STRING;
+    result->rows[0].values[0].string_value = malloc(100);
+    snprintf(result->rows[0].values[0].string_value, 100, "Inserted 1 row");
+    result->has_header = true;
+    result->delimiter = ',';
+    result->quote = '"';
+    
+    csv_free(table);
+    return result;
+}
+
+/* evaluate UPDATE statement */
+static ResultSet* evaluate_update(ASTNode* update_node) {
+    // load existing table
+    CsvTable* table = load_table_from_string(update_node->update.table);
+    if (!table) {
+        fprintf(stderr, "Error: Could not load table '%s'\n", update_node->update.table);
+        return NULL;
+    }
+    
+    // create context for condition evaluation
+    QueryContext ctx;
+    ctx.tables = malloc(sizeof(TableRef));
+    ctx.tables[0].alias = strdup("__main__");
+    ctx.tables[0].table = table;
+    ctx.table_count = 1;
+    ctx.query = NULL;
+    ctx.outer_row = NULL;
+    ctx.outer_table = NULL;
+    
+    int updated_count = 0;
+    
+    // process each row
+    for (int row = 0; row < table->row_count; row++) {
+        // check WHERE condition
+        bool matches = true;
+        if (update_node->update.where) {
+            matches = evaluate_condition(&ctx, update_node->update.where, &table->rows[row], 0);
+        }
+        
+        if (matches) {
+            // update columns
+            for (int i = 0; i < update_node->update.assignment_count; i++) {
+                ASTNode* assignment = update_node->update.assignments[i];
+                const char* col_name = assignment->assignment.column;
+                
+                int col_idx = csv_get_column_index(table, col_name);
+                if (col_idx < 0) {
+                    fprintf(stderr, "Error: Column '%s' not found\n", col_name);
+                    context_free(&ctx);
+                    csv_free(table);
+                    return NULL;
+                }
+                
+                // Note: We don't free old value because it may point to mmap'd data
+                // The value will be overwritten and csv_save will write the new value
+                
+                // evaluate new value
+                ASTNode* val_node = assignment->assignment.value;
+                if (val_node->type == NODE_TYPE_LITERAL) {
+                    const char* literal = val_node->literal;
+                    Value parsed = parse_value(literal, strlen(literal));
+                    table->rows[row].values[col_idx] = parsed;
+                } else {
+                    Value result = evaluate_expression(&ctx, val_node, &table->rows[row], 0);
+                    table->rows[row].values[col_idx] = result;
+                }
+            }
+            updated_count++;
+        }
+    }
+    
+    // save table back to file
+    if (!csv_save(update_node->update.table, table)) {
+        fprintf(stderr, "Error: Could not save table '%s'\n", update_node->update.table);
+        free(ctx.tables[0].alias);
+        free(ctx.tables);
+        csv_free(table);
+        return NULL;
+    }
+    
+    // return result message
+    ResultSet* result = malloc(sizeof(ResultSet));
+    result->filename = strdup("UPDATE result");
+    result->data = NULL;
+    result->file_size = 0;
+    result->fd = -1;
+    result->column_count = 1;
+    result->columns = malloc(sizeof(Column));
+    result->columns[0].name = strdup("message");
+    result->columns[0].inferred_type = VALUE_TYPE_STRING;
+    result->row_count = 1;
+    result->row_capacity = 1;
+    result->rows = malloc(sizeof(Row));
+    result->rows[0].column_count = 1;
+    result->rows[0].values = malloc(sizeof(Value));
+    result->rows[0].values[0].type = VALUE_TYPE_STRING;
+    result->rows[0].values[0].string_value = malloc(100);
+    snprintf(result->rows[0].values[0].string_value, 100, "Updated %d row(s)", updated_count);
+    result->has_header = true;
+    result->delimiter = ',';
+    result->quote = '"';
+    
+    // Free context manually (don't use context_free to avoid double-free of table)
+    free(ctx.tables[0].alias);
+    free(ctx.tables);
+    csv_free(table);
+    return result;
+}
+
+/* evaluate DELETE statement */
+static ResultSet* evaluate_delete(ASTNode* delete_node) {
+    // load existing table
+    CsvTable* table = load_table_from_string(delete_node->delete_stmt.table);
+    if (!table) {
+        fprintf(stderr, "Error: Could not load table '%s'\n", delete_node->delete_stmt.table);
+        return NULL;
+    }
+    
+    // create context for condition evaluation
+    QueryContext ctx;
+    ctx.tables = malloc(sizeof(TableRef));
+    ctx.tables[0].alias = strdup("__main__");
+    ctx.tables[0].table = table;
+    ctx.table_count = 1;
+    ctx.query = NULL;
+    ctx.outer_row = NULL;
+    ctx.outer_table = NULL;
+    
+    // find rows to delete
+    Row** rows_to_keep = malloc(sizeof(Row*) * table->row_count);
+    int keep_count = 0;
+    int deleted_count = 0;
+    
+    for (int row = 0; row < table->row_count; row++) {
+        bool matches = evaluate_condition(&ctx, delete_node->delete_stmt.where, &table->rows[row], 0);
+        
+        if (!matches) {
+            // keep this row
+            rows_to_keep[keep_count++] = &table->rows[row];
+        } else {
+            // delete this row - free string values
+            deleted_count++;
+            for (int col = 0; col < table->rows[row].column_count; col++) {
+                if (table->rows[row].values[col].type == VALUE_TYPE_STRING) {
+                    free(table->rows[row].values[col].string_value);
+                }
+            }
+            free(table->rows[row].values);
+        }
+    }
+    
+    // rebuild rows array
+    Row* new_rows = malloc(sizeof(Row) * keep_count);
+    for (int i = 0; i < keep_count; i++) {
+        new_rows[i] = *rows_to_keep[i];
+    }
+    free(rows_to_keep);
+    free(table->rows);
+    table->rows = new_rows;
+    table->row_count = keep_count;
+    table->row_capacity = keep_count;
+    
+    // save table back to file
+    if (!csv_save(delete_node->delete_stmt.table, table)) {
+        fprintf(stderr, "Error: Could not save table '%s'\n", delete_node->delete_stmt.table);
+        free(ctx.tables[0].alias);
+        free(ctx.tables);
+        csv_free(table);
+        return NULL;
+    }
+    
+    // return result message
+    ResultSet* result = malloc(sizeof(ResultSet));
+    result->filename = strdup("DELETE result");
+    result->data = NULL;
+    result->file_size = 0;
+    result->fd = -1;
+    result->column_count = 1;
+    result->columns = malloc(sizeof(Column));
+    result->columns[0].name = strdup("message");
+    result->columns[0].inferred_type = VALUE_TYPE_STRING;
+    result->row_count = 1;
+    result->row_capacity = 1;
+    result->rows = malloc(sizeof(Row));
+    result->rows[0].column_count = 1;
+    result->rows[0].values = malloc(sizeof(Value));
+    result->rows[0].values[0].type = VALUE_TYPE_STRING;
+    result->rows[0].values[0].string_value = malloc(100);
+    snprintf(result->rows[0].values[0].string_value, 100, "Deleted %d row(s)", deleted_count);
+    result->has_header = true;
+    result->delimiter = ',';
+    result->quote = '"';
+    
+    // free context manually, don't use context_free to avoid double-free of table
+    free(ctx.tables[0].alias);
+    free(ctx.tables);
+    csv_free(table);
+    return result;
+}
+

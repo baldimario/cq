@@ -23,6 +23,30 @@ cq -q "SELECT * FROM data.csv WHERE role = 'admin'" -o output.csv
 cq -q "SELECT * FROM data.csv WHERE age > 30" -c
 ```
 
+## Data Manipulation (INSERT, UPDATE, DELETE)
+
+**Modify CSV files directly:**
+
+```bash
+# INSERT - Add new rows
+cq -q "INSERT INTO 'data/users.csv' (id, name, age) VALUES (100, 'Mario', 30)"
+cq -q "INSERT INTO 'data/users.csv' VALUES (101, 'Luigi', 28, 'user', 175, 1)"
+
+# UPDATE - Modify existing rows
+cq -q "UPDATE 'data/users.csv' SET age = 31 WHERE name = 'Mario'"
+cq -q "UPDATE 'data/users.csv' SET role = 'admin', active = 1 WHERE age > 25"
+
+# DELETE - Remove rows (WHERE clause required for safety)
+cq -q "DELETE FROM 'data/users.csv' WHERE active = 0"
+cq -q "DELETE FROM 'data/users.csv' WHERE age < 18"
+```
+
+**Notes:**
+- All DML operations modify the CSV file in-place
+- DELETE requires WHERE clause (safety measure to prevent accidental data loss)
+- Use quotes around file paths with special characters: `'data/file.csv'`
+- Column names in INSERT are optional if providing all values in order
+
 ## Installation
 
 ### Prerequisites
@@ -167,7 +191,7 @@ MOD(dividend, divisor)        -- Modulo (remainder of division, NULL if divisor 
 3. Addition, Subtraction `+`, `-`
 4. Bitwise `&`, `|`, `^`
 
-## 🔧 Command Line Interface
+## Command Line Interface
 
 ```bash
 cq [OPTIONS]
@@ -213,7 +237,7 @@ The engine automatically infers types from CSV data:
 | `STRING` | Text values | `"Alice"`, `"admin"` |
 | `NULL` | Missing values | Empty CSV cells |
 
-## 📝 CSV Format
+## CSV Format
 
 ### Supported Features
 - Header row (automatically detected)
@@ -560,6 +584,7 @@ tests/
 ├── test_arithmetic.c           # Arithmetic expressions (22 tests)
 ├── test_csv.c                  # CSV loading and parsing
 ├── test_distinct.c             # DISTINCT keyword (4 tests)
+├── test_dml.c                  # INSERT/UPDATE/DELETE operations (8 tests)
 ├── test_evaluator.c            # Query evaluation
 ├── test_extended_operators.c   # Modulo, bitwise, NOT (23 tests)
 ├── test_like.c                 # LIKE and ILIKE operators (8 tests)
@@ -575,6 +600,7 @@ tests/
 # Run specific test
 ./build/test_arithmetic
 ./build/test_distinct
+./build/test_dml
 ./build/test_evaluator
 ```
 
