@@ -1,57 +1,67 @@
-name: Build and Test on Multiple Platforms
+name: Cross-Build and Test (with zig build system)
+# TODO: add running test
 
 on:
   push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
+    #branches: ["release"]
+    tags:
+      - 0.*
   workflow_dispatch:
 
 jobs:
   build:
+    name: Build with zig
     runs-on: ubuntu-latest
-    name: Build zig
+    strategy:
+      matrix:
+        target:  # Valid zig targets here
+          - aarch64-linux
+          # - x86_64-linux
+          # - aarch64-macos
+          # - x86_64-macos
+          # - x86_64-windows
+      
     steps:
       - uses: actions/checkout@v3
       - uses: mlugg/setup-zig@v2
-      - name: Build with zig for aarch64-linux 
+      - name: Build for ${{matrix.target}}
         working-directory: ./zig
-        run: zig build -Dtarget=aarch64-linux
-      - name: Upload artifact for aarch64-linux
+        run: zig build -Dtarget=${{matrix.target}} --release=small --summary all
+      - name: Upload artifact bin for ${{matrix.target}}
         uses: actions/upload-artifact@v4
         with:
-          name: cq-aarch64-linux
-          path: ./zig/zig-out/.linux-.aarch64
-      - name: Build with zig for x86_64-linux 
-        working-directory: ./zig
-        run: zig build -Dtarget=x86_64-linux
-      - name: Upload artifact for x86_64-linux
+          name: cq_${{matrix.target}}
+          path: zig/zig-out/${{matrix.target}}/
+      - name: Upload artifact lib for ${{matrix.target}}
         uses: actions/upload-artifact@v4
         with:
-          name: cq-aarch64-linux
-          path: ./zig/zig-out/.linux-.aarch64
-      - name: Build with zig for x86_64-windows 
-        working-directory: ./zig
-        run: zig build -Dtarget=x86_64-windows 
-      - name: Upload artifact for x86_64-windows
-        uses: actions/upload-artifact@v4
-        with:
-          name: cq-x86_64-windows
-          path: ./zig/zig-out/.x86_64-.windows
+          name: libcq_${{matrix.target}}
+          path: zig/zig-out/${{matrix.target}}_lib/
 
-      - name: Build with zig for aarch64-macos 
-        working-directory: ./zig
-        run: zig build -Dtarget=aarch64-macos
-      - name: Upload artifact for aarch64-macos
+      - name: Upload artifact shared lib for ${{matrix.target}}
         uses: actions/upload-artifact@v4
         with:
-          name: cq-aarch64-macos
-          path: ./zig/zig-out/.aarch64-.macos
-      - name: Build with zig for x86_64-macos
-        working-directory: ./zig
-        run: zig build -Dtarget=x86_64-macos
-      - name: Upload artifact for x86_64-macos
-        uses: actions/upload-artifact@v4
+          name: libcq_${{matrix.target}}_shared
+          path: zig/zig-out/${{matrix.target}}_shared/
+      
+      - name: Create Release for cq_${{matrix.target}}
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: cq-aarch64-linux
-          path: ./zig/zig-out/.x86_64-.macos
+          tag_name: ${{ github.ref }}
+          release_name: Release cq_${{matrix.target}} ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release cq_${{matrix.target}}
+        id: upload-release-asset 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./my-artifact.zip
+          asset_name: .zip
+          asset_content_type: application/zip
