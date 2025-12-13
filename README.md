@@ -47,6 +47,37 @@ cq -q "DELETE FROM 'data/users.csv' WHERE age < 18"
 - Use quotes around file paths with special characters: `'data/file.csv'`
 - Column names in INSERT are optional if providing all values in order
 
+## CREATE TABLE (Save Query Results)
+
+**Create new CSV files from query results or with specified schema:**
+
+```bash
+# CREATE TABLE - Save query results to new file
+cq -q "CREATE TABLE 'output.csv' AS SELECT * FROM 'data.csv' WHERE age > 25"
+
+# CREATE TABLE - With filtering and aggregation
+cq -q "CREATE TABLE 'summary.csv' AS SELECT role, COUNT(*) as cnt, AVG(age) as avg_age FROM 'users.csv' GROUP BY role"
+
+# CREATE TABLE - Combine multiple files
+cq -q "CREATE TABLE 'all_data.csv' AS SELECT * FROM 'data1.csv' UNION ALL SELECT * FROM 'data2.csv'"
+
+# CREATE TABLE - With JOIN
+cq -q "CREATE TABLE 'report.csv' AS SELECT u.name, r.role_name FROM 'users.csv' AS u JOIN 'roles.csv' AS r ON u.role_id = r.id"
+
+# CREATE TABLE - Create empty file with schema
+cq -q "CREATE TABLE 'new_table.csv' (id, name, age, role)"
+
+# CREATE TABLE - Define schema for file without header
+cq -q "CREATE TABLE 'data_no_header.csv' AS (col1, col2, col3)"
+```
+
+**Notes:**
+- CREATE TABLE AS SELECT materializes query results into a new CSV file
+- If file exists, it will be replaced
+- Useful for creating derived tables, reports, or intermediate results
+- Empty schema creation useful for defining structure before data insertion
+- Schema mapping (AS (col1, col2)) creates empty file with specified column names
+
 ## Installation
 
 ### Prerequisites
@@ -127,6 +158,8 @@ make CC=aarch64-linux-gnu-gcc
 | Category | Keywords |
 |----------|----------|
 | **Query Structure** | `SELECT`, `DISTINCT`, `FROM`, `WHERE`, `GROUP BY`, `HAVING`, `ORDER BY`, `LIMIT`, `OFFSET` |
+| **Data Definition** | `CREATE`, `TABLE`, `AS` |
+| **Data Manipulation** | `INSERT`, `INTO`, `VALUES`, `UPDATE`, `SET`, `DELETE` |
 | **Joins** | `JOIN`, `INNER JOIN`, `LEFT JOIN`, `RIGHT JOIN`, `FULL JOIN`, `ON` |
 | **Set Operations** | `UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT` |
 | **Logical Operators** | `AND`, `OR`, `NOT`, `IN`, `NOT IN` |
@@ -582,6 +615,7 @@ make test
 ```
 tests/
 ├── test_arithmetic.c           # Arithmetic expressions (22 tests)
+├── test_create_table.c         # CREATE TABLE operations (8 tests)
 ├── test_csv.c                  # CSV loading and parsing
 ├── test_distinct.c             # DISTINCT keyword (4 tests)
 ├── test_dml.c                  # INSERT/UPDATE/DELETE operations (8 tests)
@@ -599,6 +633,7 @@ tests/
 ```bash
 # Run specific test
 ./build/test_arithmetic
+./build/test_create_table
 ./build/test_distinct
 ./build/test_dml
 ./build/test_evaluator
@@ -759,15 +794,17 @@ make address_sanitizer
 - Arithmetic expressions with precedence
 - Scalar and aggregate functions
 - All join types (INNER, LEFT, RIGHT, FULL)
+- Data manipulation (INSERT, UPDATE, DELETE)
+- CREATE TABLE (save query results, define schema)
 
 ### Planned Features
-- [ ] INSERT/UPDATE/DELETE support
-- [ ] CREATE TABLE from query results
 - [ ] More aggregate functions (STDDEV, MEDIAN)
 - [ ] Window functions (ROW_NUMBER, RANK)
 - [ ] CASE expressions
 - [ ] Index support for large files
 - [ ] Query optimization
+- [ ] READ from STDIN for piping data
+- [ ] READ queries from file
 
 ## 🔗 Additional Resources
 
@@ -791,6 +828,19 @@ WHERE t.age > 25
 GROUP BY t.role
 ORDER BY MAX(t.height) DESC
 LIMIT 5
+
+-- CREATE TABLE - Save query results
+CREATE TABLE 'active_users.csv' AS
+SELECT * FROM 'users.csv' WHERE active = 1
+
+-- CREATE TABLE - Aggregation report
+CREATE TABLE 'summary.csv' AS
+SELECT role, COUNT(*) as cnt, AVG(age) as avg_age
+FROM 'users.csv'
+GROUP BY role
+
+-- CREATE TABLE - Empty table with schema
+CREATE TABLE 'new_table.csv' (id, name, email, created_at)
 
 -- String manipulation
 SELECT 

@@ -25,6 +25,7 @@ static ResultSet* set_except(ResultSet* left, ResultSet* right);
 static ResultSet* evaluate_insert(ASTNode* insert_node);
 static ResultSet* evaluate_update(ASTNode* update_node);
 static ResultSet* evaluate_delete(ASTNode* delete_node);
+static ResultSet* evaluate_create_table(ASTNode* create_node);
 
 /* pattern matching for LIKE and ILIKE operators
  * supports % (any sequence) and _ (single character)
@@ -2771,13 +2772,15 @@ static ResultSet* evaluate_query_internal(ASTNode* query_ast, Row* outer_row, Cs
 ResultSet* evaluate_query(ASTNode* query_ast) {
     if (!query_ast) return NULL;
     
-    // handle DML statements (INSERT, UPDATE, DELETE)
+    // handle DML statements (INSERT, UPDATE, DELETE, CREATE TABLE)
     if (query_ast->type == NODE_TYPE_INSERT) {
         return evaluate_insert(query_ast);
     } else if (query_ast->type == NODE_TYPE_UPDATE) {
         return evaluate_update(query_ast);
     } else if (query_ast->type == NODE_TYPE_DELETE) {
         return evaluate_delete(query_ast);
+    } else if (query_ast->type == NODE_TYPE_CREATE_TABLE) {
+        return evaluate_create_table(query_ast);
     }
     
     // handle set operations (UNION, INTERSECT, EXCEPT)
@@ -3130,3 +3133,118 @@ static ResultSet* evaluate_delete(ASTNode* delete_node) {
     return result;
 }
 
+/* evaluate CREATE TABLE statement */
+static ResultSet* evaluate_create_table(ASTNode* create_node) {
+    const char* filepath = create_node->create_table.table;
+    
+    if (create_node->create_table.is_schema_only) {
+        // CREATE TABLE 'file.csv' (col1, col2, col3) - create empty file with header
+        if (create_node->create_table.column_count == 0) {
+            fprintf(stderr, "Error: No columns specified for CREATE TABLE\n");
+            return NULL;
+        }
+        
+        // create empty CSV table with just header
+        CsvTable* table = malloc(sizeof(CsvTable));
+        table->filename = strdup(filepath);
+        table->data = NULL;
+        table->file_size = 0;
+        table->fd = -1;
+        table->column_count = create_node->create_table.column_count;
+        table->columns = malloc(sizeof(Column) * table->column_count);
+        
+        for (int i = 0; i < table->column_count; i++) {
+            table->columns[i].name = strdup(create_node->create_table.columns[i]);
+            table->columns[i].inferred_type = VALUE_TYPE_STRING;  // default type
+        }
+        
+        table->row_count = 0;
+        table->row_capacity = 0;
+        table->rows = NULL;
+        table->has_header = true;
+        table->delimiter = ',';
+        table->quote = '"';
+        
+        // save to file
+        if (!csv_save(filepath, table)) {
+            fprintf(stderr, "Error: Could not create table '%s'\n", filepath);
+            csv_free(table);
+            return NULL;
+        }
+        
+        csv_free(table);
+        
+        // return success message
+        ResultSet* result = malloc(sizeof(ResultSet));
+        result->filename = strdup("CREATE TABLE result");
+        result->data = NULL;
+        result->file_size = 0;
+        result->fd = -1;
+        result->column_count = 1;
+        result->columns = malloc(sizeof(Column));
+        result->columns[0].name = strdup("message");
+        result->columns[0].inferred_type = VALUE_TYPE_STRING;
+        result->row_count = 1;
+        result->row_capacity = 1;
+        result->rows = malloc(sizeof(Row));
+        result->rows[0].column_count = 1;
+        result->rows[0].values = malloc(sizeof(Value));
+        result->rows[0].values[0].type = VALUE_TYPE_STRING;
+        result->rows[0].values[0].string_value = malloc(100);
+        snprintf(result->rows[0].values[0].string_value, 100, 
+                "Created table '%s' with %d column(s)", 
+                filepath, create_node->create_table.column_count);
+        result->has_header = true;
+        result->delimiter = ',';
+        result->quote = '"';
+        
+        return result;
+        
+    } else if (create_node->create_table.query) {
+        // CREATE TABLE 'file.csv' AS SELECT ... - save query results
+        ResultSet* query_result = evaluate_query(create_node->create_table.query);
+        if (!query_result) {
+            fprintf(stderr, "Error: Failed to execute query in CREATE TABLE AS\n");
+            return NULL;
+        }
+        
+        // save result to file
+        if (!csv_save(filepath, query_result)) {
+            fprintf(stderr, "Error: Could not save table '%s'\n", filepath);
+            csv_free(query_result);
+            return NULL;
+        }
+        
+        int saved_rows = query_result->row_count;
+        csv_free(query_result);
+        
+        // return success message
+        ResultSet* result = malloc(sizeof(ResultSet));
+        result->filename = strdup("CREATE TABLE result");
+        result->data = NULL;
+        result->file_size = 0;
+        result->fd = -1;
+        result->column_count = 1;
+        result->columns = malloc(sizeof(Column));
+        result->columns[0].name = strdup("message");
+        result->columns[0].inferred_type = VALUE_TYPE_STRING;
+        result->row_count = 1;
+        result->row_capacity = 1;
+        result->rows = malloc(sizeof(Row));
+        result->rows[0].column_count = 1;
+        result->rows[0].values = malloc(sizeof(Value));
+        result->rows[0].values[0].type = VALUE_TYPE_STRING;
+        result->rows[0].values[0].string_value = malloc(100);
+        snprintf(result->rows[0].values[0].string_value, 100, 
+                "Created table '%s' with %d row(s)", 
+                filepath, saved_rows);
+        result->has_header = true;
+        result->delimiter = ',';
+        result->quote = '"';
+        
+        return result;
+    } else {
+        fprintf(stderr, "Error: Invalid CREATE TABLE statement\n");
+        return NULL;
+    }
+}

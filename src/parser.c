@@ -133,6 +133,16 @@ void releaseNode(ASTNode* node) {
             free(node->delete_stmt.table);
             releaseNode(node->delete_stmt.where);
             break;
+        case NODE_TYPE_CREATE_TABLE:
+            free(node->create_table.table);
+            if (node->create_table.columns) {
+                for (int i = 0; i < node->create_table.column_count; i++) {
+                    free(node->create_table.columns[i]);
+                }
+                free(node->create_table.columns);
+            }
+            releaseNode(node->create_table.query);
+            break;
         case NODE_TYPE_ASSIGNMENT:
             free(node->assignment.column);
             releaseNode(node->assignment.value);
@@ -1182,7 +1192,7 @@ static void parse_limit_offset(Parser* parser, int* limit, int* offset) {
  * Handles SELECT, FROM, JOINs, WHERE, GROUP BY, HAVING, ORDER BY, LIMIT/OFFSET
  */
 static ASTNode* parse_query_internal(Parser* parser) {
-    // Check for INSERT, UPDATE, DELETE first
+    // Check for INSERT, UPDATE, DELETE, CREATE first
     Token* first = parser_current_token(parser);
     if (first->type == TOKEN_TYPE_KEYWORD) {
         if (strcasecmp(first->value, "INSERT") == 0) {
@@ -1191,6 +1201,8 @@ static ASTNode* parse_query_internal(Parser* parser) {
             return parse_update(parser);
         } else if (strcasecmp(first->value, "DELETE") == 0) {
             return parse_delete(parser);
+        } else if (strcasecmp(first->value, "CREATE") == 0) {
+            return parse_create_table(parser);
         }
     }
     
@@ -1451,6 +1463,22 @@ void printAst(ASTNode* node, int depth) {
                 printAst(node->delete_stmt.where, depth + 2);
             }
             break;
+        case NODE_TYPE_CREATE_TABLE:
+            printf("CREATE TABLE: %s\n", node->create_table.table);
+            if (node->create_table.is_schema_only) {
+                print_indent(depth + 1);
+                printf("COLUMNS:\n");
+                for (int i = 0; i < node->create_table.column_count; i++) {
+                    print_indent(depth + 2);
+                    printf("%s\n", node->create_table.columns[i]);
+                }
+            }
+            if (node->create_table.query) {
+                print_indent(depth + 1);
+                printf("AS:\n");
+                printAst(node->create_table.query, depth + 2);
+            }
+            break;
         case NODE_TYPE_ASSIGNMENT:
             printf("ASSIGN: %s = ", node->assignment.column);
             if (node->assignment.value) {
@@ -1686,3 +1714,146 @@ ASTNode* parse_delete(Parser* parser) {
     return node;
 }
 
+/* parse CREATE TABLE 'file.csv' AS SELECT ... 
+ *    or CREATE TABLE 'file.csv' (col1, col2, col3)
+ *    or CREATE TABLE 'file.csv' AS (col1, col2, col3)
+ */
+ASTNode* parse_create_table(Parser* parser) {
+    // CREATE keyword already verified by caller, just advance
+    parser_advance(parser);
+    
+    // TABLE keyword
+    if (!parser_expect(parser, TOKEN_TYPE_KEYWORD, "TABLE")) {
+        fprintf(stderr, "Error: Expected TABLE after CREATE\n");
+        return NULL;
+    }
+    
+    // table name (file path)
+    Token* table_token = parser_current_token(parser);
+    if (table_token->type != TOKEN_TYPE_IDENTIFIER && table_token->type != TOKEN_TYPE_LITERAL) {
+        fprintf(stderr, "Error: Expected table name/path after CREATE TABLE\n");
+        return NULL;
+    }
+    
+    ASTNode* node = create_node(NODE_TYPE_CREATE_TABLE);
+    node->create_table.table = strdup(table_token->value);
+    node->create_table.columns = NULL;
+    node->create_table.column_count = 0;
+    node->create_table.query = NULL;
+    node->create_table.is_schema_only = false;
+    parser_advance(parser);
+    
+    // check next token: AS or (
+    if (parser_match(parser, TOKEN_TYPE_KEYWORD, "AS")) {
+        parser_advance(parser);
+        
+        if (parser_match(parser, TOKEN_TYPE_PUNCTUATION, "(")) {
+            // could be AS (col1, col2) or AS (SELECT ...)
+            // peek to see if next token is SELECT
+            Token* peek = parser_peek_token(parser, 1);
+            if (peek && peek->type == TOKEN_TYPE_KEYWORD && 
+                strcasecmp(peek->value, "SELECT") == 0) {
+                // AS (SELECT ...) for a subquery
+                parser_advance(parser); // consume (
+                node->create_table.query = parse_query_internal(parser);
+                if (!node->create_table.query) {
+                    fprintf(stderr, "Error: Failed to parse SELECT query in CREATE TABLE AS\n");
+                    releaseNode(node);
+                    return NULL;
+                }
+                if (!parser_expect(parser, TOKEN_TYPE_PUNCTUATION, ")")) {
+                    fprintf(stderr, "Error: Expected ')' after SELECT query\n");
+                    releaseNode(node);
+                    return NULL;
+                }
+            } else {
+                // AS (col1, col2, col3) for schema mapping
+                parser_advance(parser); // consume (
+                int capacity = 4;
+                node->create_table.columns = malloc(sizeof(char*) * capacity);
+                
+                while (1) {
+                    Token* col = parser_current_token(parser);
+                    if (col->type != TOKEN_TYPE_IDENTIFIER) {
+                        fprintf(stderr, "Error: Expected column name in schema definition\n");
+                        releaseNode(node);
+                        return NULL;
+                    }
+                    
+                    if (node->create_table.column_count >= capacity) {
+                        capacity *= 2;
+                        node->create_table.columns = realloc(node->create_table.columns, 
+                                                             sizeof(char*) * capacity);
+                    }
+                    
+                    node->create_table.columns[node->create_table.column_count++] = strdup(col->value);
+                    parser_advance(parser);
+                    
+                    if (parser_match(parser, TOKEN_TYPE_PUNCTUATION, ",")) {
+                        parser_advance(parser);
+                    } else {
+                        break;
+                    }
+                }
+                
+                if (!parser_expect(parser, TOKEN_TYPE_PUNCTUATION, ")")) {
+                    fprintf(stderr, "Error: Expected ')' after column list\n");
+                    releaseNode(node);
+                    return NULL;
+                }
+                // this is schema mapping but we'll treat as schema only for now
+                node->create_table.is_schema_only = true;
+            }
+        } else {
+            // AS SELECT without parentheses
+            node->create_table.query = parse_query_internal(parser);
+            if (!node->create_table.query) {
+                fprintf(stderr, "Error: Failed to parse SELECT query in CREATE TABLE AS\n");
+                releaseNode(node);
+                return NULL;
+            }
+        }
+    } else if (parser_match(parser, TOKEN_TYPE_PUNCTUATION, "(")) {
+        // CREATE TABLE 'file' (col1, col2, col3) for empty table with schema
+        parser_advance(parser);
+        int capacity = 4;
+        node->create_table.columns = malloc(sizeof(char*) * capacity);
+        
+        while (1) {
+            Token* col = parser_current_token(parser);
+            if (col->type != TOKEN_TYPE_IDENTIFIER) {
+                fprintf(stderr, "Error: Expected column name in CREATE TABLE\n");
+                releaseNode(node);
+                return NULL;
+            }
+            
+            if (node->create_table.column_count >= capacity) {
+                capacity *= 2;
+                node->create_table.columns = realloc(node->create_table.columns, 
+                                                     sizeof(char*) * capacity);
+            }
+            
+            node->create_table.columns[node->create_table.column_count++] = strdup(col->value);
+            parser_advance(parser);
+            
+            if (parser_match(parser, TOKEN_TYPE_PUNCTUATION, ",")) {
+                parser_advance(parser);
+            } else {
+                break;
+            }
+        }
+        
+        if (!parser_expect(parser, TOKEN_TYPE_PUNCTUATION, ")")) {
+            fprintf(stderr, "Error: Expected ')' after column list\n");
+            releaseNode(node);
+            return NULL;
+        }
+        node->create_table.is_schema_only = true;
+    } else {
+        fprintf(stderr, "Error: Expected AS or '(' after table name in CREATE TABLE\n");
+        releaseNode(node);
+        return NULL;
+    }
+    
+    return node;
+}

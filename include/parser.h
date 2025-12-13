@@ -26,6 +26,7 @@ typedef enum {
     NODE_TYPE_UPDATE,
     NODE_TYPE_DELETE,
     NODE_TYPE_ASSIGNMENT,
+    NODE_TYPE_CREATE_TABLE,
 } ASTNodeType;
 
 typedef enum {
@@ -145,6 +146,14 @@ struct ASTNode {
             ASTNode* value;        // value to assign
         } assignment;
 
+        struct {
+            char* table;           // target CSV file path
+            char** columns;        // column names (for schema definition or empty table)
+            int column_count;
+            ASTNode* query;        // SELECT query (NULL if just schema)
+            bool is_schema_only;   // true if CREATE TABLE 'file' (col1, col2, ...)
+        } create_table;
+
         char* literal;
         char* identifier;
         char* alias;
@@ -188,6 +197,7 @@ ASTNode* parse_primary(Parser* parser);
 ASTNode* parse_insert(Parser* parser);
 ASTNode* parse_update(Parser* parser);
 ASTNode* parse_delete(Parser* parser);
+ASTNode* parse_create_table(Parser* parser);
 void printAst(ASTNode* node, int depth);
 
 #endif
