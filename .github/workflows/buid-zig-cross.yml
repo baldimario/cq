@@ -3,9 +3,7 @@ name: Cross-Build and Test (with zig build system)
 
 on:
   push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
+    branches: ["release"]
   workflow_dispatch:
 
 jobs:
