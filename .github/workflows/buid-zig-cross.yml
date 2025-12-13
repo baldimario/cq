@@ -7,59 +7,92 @@ on:
       - v*
 
 jobs:
-  build:
+  create_release:
     name: Build with zig
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        target:  # Valid zig targets here
-          - aarch64-linux
-          # - x86_64-linux
-          # - aarch64-macos
-          # - x86_64-macos
-          # - x86_64-windows
-      
+    outputs: 
+      upload_url: ${{ steps.create_release.outputs.upload_url }} 
     steps:
       - uses: actions/checkout@v3
-      - uses: mlugg/setup-zig@v2
-      - name: Build for ${{matrix.target}}
-        working-directory: ./zig
-        run: zig build -Dtarget=${{matrix.target}} --release=small --summary all
-      - name: Upload artifact bin for ${{matrix.target}}
-        uses: actions/upload-artifact@v4
-        with:
-          name: cq_${{matrix.target}}
-          path: zig/zig-out/${{matrix.target}}/
-      - name: Upload artifact lib for ${{matrix.target}}
-        uses: actions/upload-artifact@v4
-        with:
-          name: libcq_${{matrix.target}}
-          path: zig/zig-out/${{matrix.target}}_lib/
-
-      - name: Upload artifact shared lib for ${{matrix.target}}
-        uses: actions/upload-artifact@v4
-        with:
-          name: libcq_${{matrix.target}}_shared
-          path: zig/zig-out/${{matrix.target}}_shared/
-      
-      - name: Create Release for cq_${{matrix.target}}
+      - name: Create Release ${{github.ref}}
         id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref }}
-          release_name: Release cq_${{matrix.target}} ${{ github.ref }}
-          draft: false
+          release_name: Release ${{ github.ref }}
+          draft: true
           prerelease: false
 
+  build:
+    name: Build with zig
+    runs-on: ubuntu-latest
+    needs: create_release
+    strategy:
+      matrix:
+        target:  # Valid zig targets here
+          - aarch64-linux
+          - x86_64-linux
+          - aarch64-macos
+          - x86_64-macos
+          - x86_64-windows
+      
+    steps:
+      - uses: actions/checkout@v3
+      - uses: mlugg/setup-zig@v2
+
+      - name: Build for bin and lib for ${{matrix.target}}
+        working-directory: ./zig
+        run: zig build -Dtarget=${{matrix.target}} --release=small --summary all
+      
+      - name: Upload artifact bin for ${{matrix.target}}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cq_${{matrix.target}}
+          path: zig/zig-out/${{matrix.target}}/
+
+      - name: Upload artifact lib for ${{matrix.target}}
+        uses: actions/upload-artifact@v4
+        with:
+          name: libcq_${{matrix.target}}
+          path: zig/zig-out/${{matrix.target}}_lib/
+
+
+      - name: Create zip release for bin ${{matrix.target}}
+        uses: thedoctor0/zip-release@0.7.5
+        with:
+          type: 'zip'
+          filename: 'cq_${{matrix.target}}-release.zip'
+          directory: zig/zig-out/${{matrix.target}}/
+
+      - name: Create zip release for libs ${{matrix.target}}
+        uses: thedoctor0/zip-release@0.7.5
+        with:
+          type: 'zip'
+          filename: 'libcq_${{matrix.target}}-release.zip'
+          directory: zig/zig-out/${{matrix.target}}_lib/
+
       - name: Upload Release cq_${{matrix.target}}
-        id: upload-release-asset 
-        uses: alexellis/upload-assets@0.2.2
+        id: upload-release-asset-bin
+        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_paths: '["zig/zig-out/${{matrix.target}}/*"]'
-          asset_name: cq_${{matrix.target}}.zip
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_path: zig/zig-out/${{matrix.target}}/cq_${{matrix.target}}-release.zip
+          asset_name: cq_${{matrix.target}}-release.zip
           asset_content_type: application/zip
+
+      - name: Upload Release libcq_${{matrix.target}}
+        id: upload-release-asset-lib 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_path: zig/zig-out/${{matrix.target}}_lib/libcq_${{matrix.target}}-release.zip
+          asset_name: libcq_${{matrix.target}}-release.zip
+          asset_content_type: application/zip
+
+      

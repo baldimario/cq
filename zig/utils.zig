@@ -65,10 +65,7 @@ pub fn buildFor(allocator: std.mem.Allocator, info: *const BuildInfo) !void {
 
     // TODO: resolve sub-directory at more level too
     try addCFilesFromDir(b, exe, "../src/external", excludedMainSrcIfLib);
-    const postifix = if (!isLib) "" else switch (info.build_lib_info.?.is_dynamic) {
-        true => "_shared",
-        false => "_lib",
-    };
+    const postifix = if (!isLib) "" else "_lib";
     const install_prefix = try std.fmt.allocPrint(allocator, "{s}-{s}{s}", .{ @tagName(target.result.cpu.arch), @tagName(target.result.os.tag), postifix });
     const art = b.addInstallArtifact(exe, .{});
     art.dest_dir = .{ .custom = install_prefix };

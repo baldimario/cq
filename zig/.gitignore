@@ -1,3 +1,4 @@
 *
 !.gitignore
 !*.zig
+!build.zig.zon
