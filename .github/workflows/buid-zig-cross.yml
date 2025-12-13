@@ -37,4 +37,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: libcq_${{matrix.target}}
-          path: zig/zig-out/${{matrix.target}}-lib/
+          path: zig/zig-out/${{matrix.target}}_lib/
+
+      - name: Upload artifact shared lib for ${{matrix.target}}
+        uses: actions/upload-artifact@v4
+        with:
+          name: libcq_${{matrix.target}}_shared
+          path: zig/zig-out/${{matrix.target}}_shared/
