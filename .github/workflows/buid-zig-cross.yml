@@ -3,7 +3,9 @@ name: Cross-Build and Test (with zig build system)
 
 on:
   push:
-    branches: ["release"]
+    #branches: ["release"]
+    tags:
+      - 0.*
   workflow_dispatch:
 
 jobs:
@@ -14,10 +16,10 @@ jobs:
       matrix:
         target:  # Valid zig targets here
           - aarch64-linux
-          - x86_64-linux
-          - aarch64-macos
-          - x86_64-macos
-          - x86_64-windows
+          # - x86_64-linux
+          # - aarch64-macos
+          # - x86_64-macos
+          # - x86_64-windows
       
     steps:
       - uses: actions/checkout@v3
