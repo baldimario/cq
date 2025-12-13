@@ -16,7 +16,12 @@ pub const BuildInfo = struct {
     /// additional headers files
     headers: ?[][]const u8 = null,
 
+    /// Info for build a lib. If null, an executable will be build
     build_lib_info: ?struct {
+        /// true if the lib has to be dynamically linked, else will be statically
+        is_dynamic: bool,
+
+        /// the file to ignore (usually containing the main function). If null, none files will be ignored
         excluded_main_src: ?[]const u8 = null,
     } = null,
 
@@ -44,7 +49,7 @@ pub fn buildFor(allocator: std.mem.Allocator, info: *const BuildInfo) !void {
 
     const exe = switch (isLib) {
         false => b.addExecutable(.{ .name = info.artifact_name, .root_module = module }),
-        true => b.addLibrary(.{ .name = info.artifact_name, .root_module = module }),
+        true => b.addLibrary(.{ .name = info.artifact_name, .root_module = module, .linkage = if (info.build_lib_info.?.is_dynamic) .dynamic else .static }),
     };
     const excludedMainSrcIfLib = if (isLib) info.build_lib_info.?.excluded_main_src else null;
     module.addIncludePath(b.path("./../include"));
@@ -60,7 +65,11 @@ pub fn buildFor(allocator: std.mem.Allocator, info: *const BuildInfo) !void {
 
     // TODO: resolve sub-directory at more level too
     try addCFilesFromDir(b, exe, "../src/external", excludedMainSrcIfLib);
-    const install_prefix = try std.fmt.allocPrint(allocator, "{s}-{s}{s}", .{ @tagName(target.result.cpu.arch), @tagName(target.result.os.tag), if (isLib) "-lib" else "" });
+    const postifix = if (!isLib) "" else switch (info.build_lib_info.?.is_dynamic) {
+        true => "_shared",
+        false => "_lib",
+    };
+    const install_prefix = try std.fmt.allocPrint(allocator, "{s}-{s}{s}", .{ @tagName(target.result.cpu.arch), @tagName(target.result.os.tag), postifix });
     const art = b.addInstallArtifact(exe, .{});
     art.dest_dir = .{ .custom = install_prefix };
     b.getInstallStep().dependOn(&art.step);

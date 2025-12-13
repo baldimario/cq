@@ -13,6 +13,7 @@ jobs:
     name: Build with zig
     runs-on: ubuntu-latest
     strategy:
+      max-parallel: 2
       matrix:
         target:  # Valid zig targets here
           - aarch64-linux
