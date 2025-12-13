@@ -23,7 +23,7 @@ static bool is_keyword(const char* str) {
         "SELECT", "DISTINCT", "FROM", "WHERE", "GROUP", "BY", "ORDER", "AND", "OR", 
         "NOT", "IN", "AS", "ASC", "DESC", "HAVING", "JOIN", "LEFT", 
         "RIGHT", "INNER", "OUTER", "FULL", "ON", "LIMIT", "OFFSET", "LIKE", "ILIKE",
-        "UNION", "INTERSECT", "EXCEPT", "ALL", 
+        "UNION", "INTERSECT", "EXCEPT", "ALL", "BETWEEN",
         "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE", "CREATE", "TABLE", 
         "ALTER", "RENAME", "COLUMN", "ADD", "DROP", "TO", NULL
     };
@@ -167,6 +167,30 @@ Token* tokenize(const char* sql, int* token_count) {
         // skip whitespace
         if (isspace(*ptr)) {
             ptr++;
+            continue;
+        }
+        
+        // handle SQL line comments (-- comment)
+        if (ptr[0] == '-' && ptr[1] == '-') {
+            // skip until end of line
+            ptr += 2;
+            while (*ptr != '\0' && *ptr != '\n' && *ptr != '\r') {
+                ptr++;
+            }
+            continue;
+        }
+        
+        // handle SQL block comments (/* comment */)
+        if (ptr[0] == '/' && ptr[1] == '*') {
+            // skip until closing */
+            ptr += 2;
+            while (*ptr != '\0') {
+                if (ptr[0] == '*' && ptr[1] == '/') {
+                    ptr += 2;
+                    break;
+                }
+                ptr++;
+            }
             continue;
         }
         

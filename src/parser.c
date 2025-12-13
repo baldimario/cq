@@ -795,6 +795,51 @@ ASTNode* parse_condition(Parser* parser) {
         }
     }
     
+    // check for BETWEEN operator
+    if (token->type == TOKEN_TYPE_KEYWORD && strcasecmp(token->value, "BETWEEN") == 0) {
+        parser_advance(parser);
+        
+        // parse lower bound
+        ASTNode* lower = parse_expression(parser);
+        
+        // expect AND keyword
+        if (!parser_expect(parser, TOKEN_TYPE_KEYWORD, "AND")) {
+            releaseNode(left);
+            releaseNode(lower);
+            return NULL;
+        }
+        
+        // parse upper bound
+        ASTNode* upper = parse_expression(parser);
+        
+        // create condition: left >= lower AND left <= upper
+        // we need to duplicate left for the second comparison
+        ASTNode* left_copy = NULL;
+        if (left->type == NODE_TYPE_IDENTIFIER) {
+            left_copy = create_identifier_node(left->identifier);
+        } else if (left->type == NODE_TYPE_LITERAL) {
+            left_copy = create_literal_node(left->literal);
+        } else if (left->type == NODE_TYPE_BINARY_OP) {
+            // for complex expressions, just reuse with incremented refcount
+            left_copy = left;
+            retainNode(left_copy);
+        } else if (left->type == NODE_TYPE_FUNCTION) {
+            // for function calls, reuse with incremented refcount
+            left_copy = left;
+            retainNode(left_copy);
+        } else {
+            // fallback: reuse node with incremented refcount
+            left_copy = left;
+            retainNode(left_copy);
+        }
+        
+        ASTNode* cond_lower = create_condition_node(left, ">=", lower);
+        ASTNode* cond_upper = create_condition_node(left_copy, "<=", upper);
+        ASTNode* condition = create_condition_node(cond_lower, "AND", cond_upper);
+        
+        return parse_logical_continuation(parser, condition);
+    }
+    
     if (token->type == TOKEN_TYPE_OPERATOR || 
         (token->type == TOKEN_TYPE_KEYWORD && 
          (strcasecmp(token->value, "IN") == 0 || 

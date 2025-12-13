@@ -196,10 +196,25 @@ make CC=aarch64-linux-gnu-gcc
 | **Joins** | `JOIN`, `INNER JOIN`, `LEFT JOIN`, `RIGHT JOIN`, `FULL JOIN`, `ON` |
 | **Set Operations** | `UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT` |
 | **Logical Operators** | `AND`, `OR`, `NOT`, `IN`, `NOT IN` |
-| **Comparison** | `=`, `!=`, `<>`, `<`, `>`, `<=`, `>=` |
+| **Comparison** | `=`, `!=`, `<>`, `<`, `>`, `<=`, `>=`, `BETWEEN` |
 | **Pattern Matching** | `LIKE`, `ILIKE` |
 | **Sorting** | `ASC`, `DESC` |
 | **Aliases** | `AS` |
+
+### SQL Comments
+
+Both single-line and multi-line comments are supported:
+
+```sql
+-- This is a single-line comment
+SELECT name, age FROM 'users.csv' -- inline comment
+WHERE age > 20
+
+/* This is a
+   multi-line comment */
+SELECT * FROM 'data.csv'
+WHERE /* inline block comment */ status = 'active'
+```
 
 ### Aggregate Functions
 ```sql
@@ -921,6 +936,13 @@ SELECT name FROM data.csv WHERE LENGTH(name) > 5
 SELECT name FROM data.csv WHERE UPPER(role) = 'ADMIN'
 SELECT name FROM data.csv WHERE LENGTH(CONCAT(name, role)) > 10
 SELECT name FROM data.csv WHERE SUBSTRING(name, 1, 1) = 'A'
+
+-- BETWEEN operator (inclusive on both ends)
+SELECT name, age FROM 'users.csv' WHERE age BETWEEN 25 AND 35
+SELECT * FROM 'products.csv' WHERE price BETWEEN 10.0 AND 50.0
+SELECT name FROM 'users.csv' WHERE name BETWEEN 'A' AND 'M'
+SELECT * FROM 'sales.csv' WHERE date BETWEEN '2024-01-01' AND '2024-12-31'
+SELECT name, age FROM 'users.csv' WHERE age * 2 BETWEEN 50 AND 70
 
 -- Scalar functions with GROUP BY
 SELECT role, UPPER(role) AS upper_role FROM data.csv GROUP BY role
