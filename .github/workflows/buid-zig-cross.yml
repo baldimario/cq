@@ -10,84 +10,30 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
     name: Build with zig
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:  # Valid zig targets here
+          - aarch64-linux
+          - x86_64-linux
+          - aarch64-macos
+          - x86_64-macos
+          - x86_64-windows
+      
     steps:
       - uses: actions/checkout@v3
       - uses: mlugg/setup-zig@v2
-
-      # Linux (arm64)
-      - name: Build for Linux (arm64)
+      - name: Build for ${{matrix.target}}
         working-directory: ./zig
-        run: zig build -Dtarget=aarch64-linux --release=small --summary all
-      - name: Upload artifact bin for Linux (arm64)
+        run: zig build -Dtarget=${{matrix.target}} --release=small --summary all
+      - name: Upload artifact bin for ${{matrix.target}}
         uses: actions/upload-artifact@v4
         with:
-          name: cq_Linux-arm64
-          path: zig/zig-out/linux-aarch64/
-      - name: Upload artifact lib for Linux (arm64)
+          name: cq_${{matrix.target}}
+          path: zig/zig-out/${{matrix.target}}/
+      - name: Upload artifact lib for ${{matrix.target}}
         uses: actions/upload-artifact@v4
         with:
-          name: libcq_Linux-arm64
-          path: zig/zig-out/linux-aarch64-lib/
-
-      # Linux (x86_64)
-      - name: Build for Linux (x86_64)
-        working-directory: ./zig
-        run: zig build -Dtarget=x86_64-linux --release=small --summary all
-      - name: Upload bin artifact for Linux (x86_64)
-        uses: actions/upload-artifact@v4
-        with:
-          name: cq_Linux-x86_64
-          path: zig/zig-out/linux-x86_64/
-      - name: Upload bin artifact for Linux (x86_64)
-        uses: actions/upload-artifact@v4
-        with:
-          name: libcq_Linux-x86_64
-          path: zig/zig-out/linux-x86_64-lib/
-          
-
-      # MacOS (arm64)
-      - name: Build for MacOS (arm64) 
-        working-directory: ./zig
-        run: zig build -Dtarget=aarch64-macos --release=small --summary all
-      - name: Upload artifact bin for MacOS (arm64) 
-        uses: actions/upload-artifact@v4
-        with:
-          name: cq_MacOS-arm64
-          path: zig/zig-out/macos-aarch64/
-      - name: Upload artifact lib for MacOS (arm64) 
-        uses: actions/upload-artifact@v4
-        with:
-          name: libcq_MacOS-arm64
-          path: zig/zig-out/macos-aarch64-lib/
-
-      # MacOS (x86_64)
-      - name: Build for MacOS (x86_64)
-        working-directory: ./zig
-        run: zig build -Dtarget=x86_64-macos --release=small --summary all
-      - name: Upload artifact bin for x86_64-macos
-        uses: actions/upload-artifact@v4
-        with:
-          name: cq_MacOS-x86_64
-          path: zig/zig-out/macos-x86_64/
-      - name: Upload artifact lib for x86_64-macos
-        uses: actions/upload-artifact@v4
-        with:
-          name: libcq_MacOS-x86_64
-          path: zig/zig-out/macos-x86_64-lib/
-
-      # Windows (x86_64)
-      - name: Build for Windows (x86_64) 
-        working-directory: ./zig
-        run: zig build -Dtarget=x86_64-windows --release=small --summary all
-      - name: Upload artifact bin for Windows (x86_64) 
-        uses: actions/upload-artifact@v4
-        with:
-          name: cq_Window-x86_64
-          path: zig/zig-out/windows-x86_64/
-      - name: Upload artifact lib for Windows (x86_64) 
-        uses: actions/upload-artifact@v4
-        with:
-          name: libcq_Window-x86_64
-          path: zig/zig-out/windows-x86_64-lib/
+          name: libcq_${{matrix.target}}
+          path: zig/zig-out/${{matrix.target}}-lib/
