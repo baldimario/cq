@@ -1267,7 +1267,10 @@ static bool is_aggregate_function(const char* func_name) {
            strcasecmp(func_name, "SUM") == 0 ||
            strcasecmp(func_name, "AVG") == 0 ||
            strcasecmp(func_name, "MIN") == 0 ||
-           strcasecmp(func_name, "MAX") == 0;
+           strcasecmp(func_name, "MAX") == 0 ||
+           strcasecmp(func_name, "STDDEV") == 0 ||
+           strcasecmp(func_name, "STDDEV_POP") == 0 ||
+           strcasecmp(func_name, "MEDIAN") == 0;
 }
 
 /* helper to check if a SELECT clause contains any aggregate functions */
@@ -1279,7 +1282,8 @@ static bool has_aggregate_functions(ASTNode* select_node) {
         
         // check if column spec contains an aggregate function
         if (strstr(col_spec, "COUNT(") || strstr(col_spec, "SUM(") ||
-            strstr(col_spec, "AVG(") || strstr(col_spec, "MIN(") || strstr(col_spec, "MAX(")) {
+            strstr(col_spec, "AVG(") || strstr(col_spec, "MIN(") || strstr(col_spec, "MAX(") ||
+            strstr(col_spec, "STDDEV(") || strstr(col_spec, "MEDIAN(")) {
             return true;
         }
     }
@@ -1350,6 +1354,91 @@ static Value evaluate_aggregate(const char* func_name, Row** rows, int row_count
         }
         
         if (extreme) return *extreme;
+    }
+    
+    if (strcasecmp(func_name, "STDDEV") == 0 || strcasecmp(func_name, "STDDEV_POP") == 0) {
+        // calculate population standard deviation
+        double sum = 0;
+        int count = 0;
+        
+        // first pass: calculate mean
+        for (int i = 0; i < row_count; i++) {
+            Value* val = &rows[i]->values[col_idx];
+            if (val->type == VALUE_TYPE_INTEGER) {
+                sum += val->int_value;
+                count++;
+            } else if (val->type == VALUE_TYPE_DOUBLE) {
+                sum += val->double_value;
+                count++;
+            }
+        }
+        
+        if (count == 0) return result;
+        
+        double mean = sum / count;
+        
+        // second pass: calculate variance
+        double variance_sum = 0;
+        for (int i = 0; i < row_count; i++) {
+            Value* val = &rows[i]->values[col_idx];
+            double value = 0;
+            if (val->type == VALUE_TYPE_INTEGER) {
+                value = val->int_value;
+            } else if (val->type == VALUE_TYPE_DOUBLE) {
+                value = val->double_value;
+            } else {
+                continue;
+            }
+            double diff = value - mean;
+            variance_sum += diff * diff;
+        }
+        
+        double variance = variance_sum / count;
+        result.type = VALUE_TYPE_DOUBLE;
+        result.double_value = sqrt(variance);
+        return result;
+    }
+    
+    if (strcasecmp(func_name, "MEDIAN") == 0) {
+        // collect numeric values
+        double* values = malloc(sizeof(double) * row_count);
+        int count = 0;
+        
+        for (int i = 0; i < row_count; i++) {
+            Value* val = &rows[i]->values[col_idx];
+            if (val->type == VALUE_TYPE_INTEGER) {
+                values[count++] = val->int_value;
+            } else if (val->type == VALUE_TYPE_DOUBLE) {
+                values[count++] = val->double_value;
+            }
+        }
+        
+        if (count == 0) {
+            free(values);
+            return result;
+        }
+        
+        // sort values
+        for (int i = 0; i < count - 1; i++) {
+            for (int j = i + 1; j < count; j++) {
+                if (values[i] > values[j]) {
+                    double temp = values[i];
+                    values[i] = values[j];
+                    values[j] = temp;
+                }
+            }
+        }
+        
+        // calculate median
+        result.type = VALUE_TYPE_DOUBLE;
+        if (count % 2 == 1) {
+            result.double_value = values[count / 2];
+        } else {
+            result.double_value = (values[count / 2 - 1] + values[count / 2]) / 2.0;
+        }
+        
+        free(values);
+        return result;
     }
     
     return result;

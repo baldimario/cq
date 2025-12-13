@@ -14,6 +14,8 @@ SELECT
     u.role,
     COUNT(*) AS user_count,
     AVG(u.age) AS avg_age,
+    STDDEV(u.age) AS age_stddev,
+    MEDIAN(u.age) AS median_age,
     MIN(u.height) AS min_height,
     MAX(u.height) AS max_height
 FROM './data/users.csv' AS u
@@ -23,6 +25,15 @@ GROUP BY u.role
 HAVING COUNT(*) >= 2  -- Roles with at least 2 users
 ORDER BY user_count DESC, avg_age ASC
 LIMIT 5;
+
+-- Alternative: Statistical summary for all users
+-- SELECT 
+--     AVG(age) AS avg_age,
+--     STDDEV(age) AS age_stddev,
+--     MEDIAN(age) AS median_age,
+--     MIN(age) AS min_age,
+--     MAX(age) AS max_age
+-- FROM './data/users.csv';
 
 -- Alternative: Simple aggregation by role
 -- SELECT role, COUNT(*) as total

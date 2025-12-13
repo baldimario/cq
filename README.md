@@ -245,6 +245,8 @@ SUM(column)          -- Sum numeric values
 AVG(column)          -- Average of numeric values
 MIN(column)          -- Minimum value
 MAX(column)          -- Maximum value
+STDDEV(column)       -- Population standard deviation
+MEDIAN(column)       -- Median value (50th percentile)
 ```
 
 ### Scalar Functions
@@ -607,6 +609,20 @@ SELECT role, COUNT(*) AS count, AVG(age) AS avg_age, MAX(height) AS max_height
 FROM data.csv
 GROUP BY role
 
+-- Statistical aggregates
+SELECT 
+    AVG(age) AS mean_age,
+    STDDEV(age) AS stddev_age,
+    MEDIAN(age) AS median_age,
+    MIN(age) AS min_age,
+    MAX(age) AS max_age
+FROM data.csv
+
+-- Statistical aggregates with GROUP BY
+SELECT role, COUNT(*) AS cnt, AVG(age) AS avg, STDDEV(age) AS stdev, MEDIAN(age) AS median
+FROM data.csv
+GROUP BY role
+
 -- Aggregates without GROUP BY (entire table as one group)
 SELECT COUNT(*) AS total, AVG(age) AS avg_age, MIN(age) AS min_age
 FROM data.csv
@@ -871,15 +887,16 @@ make address_sanitizer
 - Subqueries (FROM, WHERE, scalar, correlated)
 - Arithmetic expressions with precedence
 - Scalar and aggregate functions
+- Statistical aggregates (STDDEV, MEDIAN)
 - All join types (INNER, LEFT, RIGHT, FULL)
 - Data manipulation (INSERT, UPDATE, DELETE)
 - CREATE TABLE (save query results, define schema)
 - ALTER TABLE (rename/add/drop columns)
 - Read queries from file (-f option)
 - Read queries from stdin (piping support)
+- SQL comments (-- and /* */)
 
 ### Planned Features
-- [ ] More aggregate functions (STDDEV, MEDIAN)
 - [ ] Window functions (ROW_NUMBER, RANK)
 - [ ] CASE expressions
 - [ ] Index support for large files
