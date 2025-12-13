@@ -22,7 +22,7 @@ jobs:
         with:
           tag_name: ${{ github.ref }}
           release_name: Release ${{ github.ref }}
-          draft: true
+          draft: false
           prerelease: false
 
   build:
@@ -63,14 +63,14 @@ jobs:
         uses: thedoctor0/zip-release@0.7.5
         with:
           type: 'zip'
-          filename: 'cq_${{matrix.target}}-release.zip'
+          filename: 'cq_${{matrix.target}}.zip'
           directory: zig/zig-out/${{matrix.target}}/
 
       - name: Create zip release for libs ${{matrix.target}}
         uses: thedoctor0/zip-release@0.7.5
         with:
           type: 'zip'
-          filename: 'libcq_${{matrix.target}}-release.zip'
+          filename: 'libcq_${{matrix.target}}.zip'
           directory: zig/zig-out/${{matrix.target}}_lib/
 
       - name: Upload Release cq_${{matrix.target}}
@@ -80,8 +80,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create_release.outputs.upload_url }}
-          asset_path: zig/zig-out/${{matrix.target}}/cq_${{matrix.target}}-release.zip
-          asset_name: cq_${{matrix.target}}-release.zip
+          asset_path: zig/zig-out/${{matrix.target}}/cq_${{matrix.target}}.zip
+          asset_name: cq_${{matrix.target}}_${{github.ref_name}}.zip
           asset_content_type: application/zip
 
       - name: Upload Release libcq_${{matrix.target}}
@@ -91,8 +91,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create_release.outputs.upload_url }}
-          asset_path: zig/zig-out/${{matrix.target}}_lib/libcq_${{matrix.target}}-release.zip
-          asset_name: libcq_${{matrix.target}}-release.zip
+          asset_path: zig/zig-out/${{matrix.target}}_lib/libcq_${{matrix.target}}.zip
+          asset_name: libcq_${{matrix.target}}_${{github.ref_name}}.zip
           asset_content_type: application/zip
 
       
