@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "include/tokenizer.h"
-#include "include/parser.h"
+#include "tokenizer.h"
+#include "parser.h"
 
 int main() {
     printf("=== Testing Window Function Parsing ===\n\n");
