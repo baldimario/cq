@@ -1,6 +1,6 @@
 # cq - High-Performance SQL Query Engine for CSV Files
 
-[![Build and Test on Multiple Platforms](https://github.com/baldimario/cq/actions/workflows/build-multi-platform.yml/badge.svg)](https://github.com/baldimario/cq/actions/workflows/build-multi-platform.yml)
+[![Cross-Build and Test (with zig build system)](https://github.com/baldimario/cq/actions/workflows/build-zig-cross.yml/badge.svg)](https://github.com/baldimario/cq/actions/workflows/build-zig-cross.yml)
 
 A lightweight, fast SQL query processor written in C that enables executing SQL queries directly on CSV files without requiring a database. Features include joins, subqueries, aggregations, arithmetic expressions, and more.
 
