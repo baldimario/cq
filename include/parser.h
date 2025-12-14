@@ -29,6 +29,7 @@ typedef enum {
     NODE_TYPE_CREATE_TABLE,
     NODE_TYPE_ALTER_TABLE,
     NODE_TYPE_CASE,
+    NODE_TYPE_WINDOW_FUNCTION,
 } ASTNodeType;
 
 typedef enum {
@@ -83,6 +84,16 @@ struct ASTNode {
             ASTNode** args;
             int arg_count;
         } function;
+
+        struct {
+            char* name;                  // function name (ROW_NUMBER, RANK, SUM, etc.)
+            ASTNode** args;              // function arguments (e.g., column for LAG/LEAD/SUM)
+            int arg_count;
+            char** partition_by;         // PARTITION BY columns
+            int partition_count;
+            char* order_by_column;       // ORDER BY column (only one for now)
+            bool order_descending;       // ORDER BY direction
+        } window_function;
 
         struct {
             ASTNode** nodes;

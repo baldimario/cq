@@ -39,6 +39,7 @@ The `assets/` directory contains ready-to-run SQL examples:
 - **[example_functions.sql](assets/example_functions.sql)** - String and math functions
 - **[example_joins.sql](assets/example_joins.sql)** - JOIN operations between CSV files
 - **[example_case.sql](assets/example_case.sql)** - CASE expressions (simple and searched forms)
+- **[example_window_functions.sql](assets/example_window_functions.sql)** - Window functions (ROW_NUMBER, RANK, LAG, LEAD, running aggregates)
 
 Run any example:
 ```bash
@@ -217,6 +218,7 @@ make CC=aarch64-linux-gnu-gcc
 | **Data Manipulation** | `INSERT`, `INTO`, `VALUES`, `UPDATE`, `SET`, `DELETE` |
 | **Joins** | `JOIN`, `INNER JOIN`, `LEFT JOIN`, `RIGHT JOIN`, `FULL JOIN`, `ON` |
 | **Set Operations** | `UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT` |
+| **Window Functions** | `ROW_NUMBER`, `RANK`, `DENSE_RANK`, `LAG`, `LEAD`, `OVER`, `PARTITION` |
 | **Logical Operators** | `AND`, `OR`, `NOT`, `IN`, `NOT IN` |
 | **Comparison** | `=`, `!=`, `<>`, `<`, `>`, `<=`, `>=`, `BETWEEN` |
 | **Pattern Matching** | `LIKE`, `ILIKE` |
@@ -617,6 +619,85 @@ GROUP BY role
 HAVING COUNT(*) > 5 AND AVG(age) > 30
 ORDER BY cnt DESC
 ```
+
+#### Window Functions
+
+Window functions perform calculations across a set of rows that are related to the current row. Unlike aggregate functions with GROUP BY, window functions retain all rows in the result.
+
+**Supported Window Functions:**
+```sql
+ROW_NUMBER()      -- Sequential number for each row within partition
+RANK()            -- Rank with gaps for tied values
+DENSE_RANK()      -- Rank without gaps for tied values
+LAG(column)       -- Access previous row's value
+LEAD(column)      -- Access next row's value
+SUM(column)       -- Running/cumulative sum
+AVG(column)       -- Running/cumulative average
+COUNT(*)          -- Running/cumulative count
+```
+
+**Basic Window Function:**
+```sql
+-- Add row numbers to all rows
+SELECT name, age, 
+       ROW_NUMBER() OVER (ORDER BY age) AS row_num
+FROM users.csv
+
+-- Rank employees by salary
+SELECT name, salary,
+       RANK() OVER (ORDER BY salary DESC) AS rank,
+       DENSE_RANK() OVER (ORDER BY salary DESC) AS dense_rank
+FROM employees.csv
+```
+
+**PARTITION BY - Separate Window per Group:**
+```sql
+-- Row number within each department
+SELECT department, name, salary,
+       ROW_NUMBER() OVER (PARTITION BY department ORDER BY salary DESC) AS dept_rank
+FROM employees.csv
+
+-- Running total per category
+SELECT category, product, price,
+       SUM(price) OVER (PARTITION BY category ORDER BY price) AS running_total
+FROM products.csv
+```
+
+**LAG and LEAD - Access Adjacent Rows:**
+```sql
+-- Compare with previous row
+SELECT name, age,
+       LAG(age) OVER (ORDER BY age) AS prev_age,
+       age - LAG(age) OVER (ORDER BY age) AS age_diff
+FROM users.csv
+
+-- Compare with next row
+SELECT date, value,
+       LEAD(value) OVER (ORDER BY date) AS next_value,
+       LEAD(value) OVER (ORDER BY date) - value AS change
+FROM timeseries.csv
+```
+
+**Running Aggregates:**
+```sql
+-- Running sum and average
+SELECT date, amount,
+       SUM(amount) OVER (ORDER BY date) AS running_sum,
+       AVG(amount) OVER (ORDER BY date) AS running_avg
+FROM sales.csv
+
+-- Running count
+SELECT product, sale_date,
+       COUNT(*) OVER (ORDER BY sale_date) AS total_sales_so_far
+FROM orders.csv
+```
+
+**Notes:**
+- All window functions require an OVER clause
+- ORDER BY within OVER determines row ordering for the calculation
+- PARTITION BY divides rows into groups (optional)
+- Window functions are evaluated after WHERE, GROUP BY, and HAVING
+- Multiple window functions can be used in the same query
 
 #### Nested Functions
 ```sql

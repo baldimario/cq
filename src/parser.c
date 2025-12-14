@@ -71,6 +71,22 @@ void releaseNode(ASTNode* node) {
             }
             free(node->function.name);
             break;
+        case NODE_TYPE_WINDOW_FUNCTION:
+            if (node->window_function.args) {
+                for (int i = 0; i < node->window_function.arg_count; i++) {
+                    releaseNode(node->window_function.args[i]);
+                }
+                free(node->window_function.args);
+            }
+            free(node->window_function.name);
+            if (node->window_function.partition_by) {
+                for (int i = 0; i < node->window_function.partition_count; i++) {
+                    free(node->window_function.partition_by[i]);
+                }
+                free(node->window_function.partition_by);
+            }
+            free(node->window_function.order_by_column);
+            break;
         case NODE_TYPE_LIST:
             if (node->list.nodes) {
                 for (int i = 0; i < node->list.node_count; i++) {
@@ -476,7 +492,9 @@ static char* build_function_string(Parser* parser) {
 /* helper: parse function call handling arguments and nested expressions */
 static ASTNode* parse_function_call(Parser* parser, bool use_full_parser) {
     Token* token = parser_current_token(parser);
-    if (token->type != TOKEN_TYPE_IDENTIFIER) {
+    
+    // Accept both identifiers and keywords (for ROW_NUMBER, RANK, etc.)
+    if (token->type != TOKEN_TYPE_IDENTIFIER && token->type != TOKEN_TYPE_KEYWORD) {
         return NULL;
     }
     
@@ -485,33 +503,31 @@ static ASTNode* parse_function_call(Parser* parser, bool use_full_parser) {
         return NULL;
     }
     
-    ASTNode* node = create_node(NODE_TYPE_FUNCTION);
-    node->function.name = strdup(token->value);
+    char* func_name = strdup(token->value);
     parser_advance(parser); // skip function name
     parser_advance(parser); // skip '('
     
     // parse arguments
     int capacity = 4;
-    node->function.args = malloc(sizeof(ASTNode*) * capacity);
-    node->function.arg_count = 0;
+    ASTNode** args = malloc(sizeof(ASTNode*) * capacity);
+    int arg_count = 0;
     
     while (!parser_match(parser, TOKEN_TYPE_PUNCTUATION, ")")) {
-        node->function.args = ensure_capacity(node->function.args, &capacity, 
-                                             node->function.arg_count, sizeof(ASTNode*));
+        args = ensure_capacity(args, &capacity, arg_count, sizeof(ASTNode*));
         
         // special handling for * in aggregate functions like COUNT(*)
         Token* current = parser_current_token(parser);
         if (current->type == TOKEN_TYPE_OPERATOR && strcmp(current->value, "*") == 0) {
             ASTNode* star_node = create_node(NODE_TYPE_IDENTIFIER);
             star_node->identifier = strdup("*");
-            node->function.args[node->function.arg_count++] = star_node;
+            args[arg_count++] = star_node;
             parser_advance(parser);
         } else {
             // use appropriate parser based on context
             if (use_full_parser) {
-                node->function.args[node->function.arg_count++] = parse_expression(parser);
+                args[arg_count++] = parse_expression(parser);
             } else {
-                node->function.args[node->function.arg_count++] = parse_additive_expr(parser);
+                args[arg_count++] = parse_additive_expr(parser);
             }
         }
         
@@ -520,6 +536,84 @@ static ASTNode* parse_function_call(Parser* parser, bool use_full_parser) {
         }
     }
     parser_expect(parser, TOKEN_TYPE_PUNCTUATION, ")");
+    
+    // check for OVER clause (window function)
+    if (parser_match(parser, TOKEN_TYPE_KEYWORD, "OVER")) {
+        parser_advance(parser); // skip OVER
+        parser_expect(parser, TOKEN_TYPE_PUNCTUATION, "(");
+        
+        ASTNode* node = create_node(NODE_TYPE_WINDOW_FUNCTION);
+        node->window_function.name = func_name;
+        node->window_function.args = args;
+        node->window_function.arg_count = arg_count;
+        node->window_function.partition_by = NULL;
+        node->window_function.partition_count = 0;
+        node->window_function.order_by_column = NULL;
+        node->window_function.order_descending = false;
+        
+        // parse PARTITION BY (optional)
+        if (parser_match(parser, TOKEN_TYPE_KEYWORD, "PARTITION")) {
+            parser_advance(parser); // skip PARTITION
+            parser_expect(parser, TOKEN_TYPE_KEYWORD, "BY");
+            
+            int part_capacity = 4;
+            node->window_function.partition_by = malloc(sizeof(char*) * part_capacity);
+            
+            while (1) {
+                Token* col = parser_current_token(parser);
+                if (col->type != TOKEN_TYPE_IDENTIFIER) {
+                    fprintf(stderr, "Error: Expected column name after PARTITION BY\n");
+                    releaseNode(node);
+                    return NULL;
+                }
+                
+                node->window_function.partition_by = ensure_capacity(
+                    node->window_function.partition_by, &part_capacity,
+                    node->window_function.partition_count, sizeof(char*)
+                );
+                node->window_function.partition_by[node->window_function.partition_count++] = strdup(col->value);
+                parser_advance(parser);
+                
+                if (!parser_match(parser, TOKEN_TYPE_PUNCTUATION, ",")) {
+                    break;
+                }
+                parser_advance(parser); // skip comma
+            }
+        }
+        
+        // parse ORDER BY (optional)
+        if (parser_match(parser, TOKEN_TYPE_KEYWORD, "ORDER")) {
+            parser_advance(parser); // skip ORDER
+            parser_expect(parser, TOKEN_TYPE_KEYWORD, "BY");
+            
+            Token* col = parser_current_token(parser);
+            if (col->type != TOKEN_TYPE_IDENTIFIER) {
+                fprintf(stderr, "Error: Expected column name after ORDER BY\n");
+                releaseNode(node);
+                return NULL;
+            }
+            
+            node->window_function.order_by_column = strdup(col->value);
+            parser_advance(parser);
+            
+            // check for DESC/ASC
+            if (parser_match(parser, TOKEN_TYPE_KEYWORD, "DESC")) {
+                node->window_function.order_descending = true;
+                parser_advance(parser);
+            } else if (parser_match(parser, TOKEN_TYPE_KEYWORD, "ASC")) {
+                parser_advance(parser);
+            }
+        }
+        
+        parser_expect(parser, TOKEN_TYPE_PUNCTUATION, ")");
+        return node;
+    }
+    
+    // regular function (not a window function)
+    ASTNode* node = create_node(NODE_TYPE_FUNCTION);
+    node->function.name = func_name;
+    node->function.args = args;
+    node->function.arg_count = arg_count;
     return node;
 }
 
@@ -556,6 +650,24 @@ static void generate_column_name(ASTNode* node, char* buf, size_t buf_size) {
                 cq_strlcat(args_str, arg_buf, sizeof(args_str));
             }
             snprintf(buf, buf_size, "%s(%s)", node->function.name, args_str);
+            break;
+        }
+        
+        case NODE_TYPE_WINDOW_FUNCTION: {
+            // generate window function string: FUNC(args) OVER (...)
+            char args_str[256] = "";
+            for (int i = 0; i < node->window_function.arg_count; i++) {
+                if (node->window_function.args[i] == NULL) {
+                    if (i > 0) cq_strlcat(args_str, ", ", sizeof(args_str));
+                    cq_strlcat(args_str, "NULL", sizeof(args_str));
+                    continue;
+                }
+                char arg_buf[128];
+                generate_column_name(node->window_function.args[i], arg_buf, sizeof(arg_buf));
+                if (i > 0) cq_strlcat(args_str, ", ", sizeof(args_str));
+                cq_strlcat(args_str, arg_buf, sizeof(args_str));
+            }
+            snprintf(buf, buf_size, "%s(%s)", node->window_function.name, args_str);
             break;
         }
             
@@ -1603,6 +1715,25 @@ void printAst(ASTNode* node, int depth) {
             printf("FUNCTION: %s\n", node->function.name);
             for (int i = 0; i < node->function.arg_count; i++) {
                 printAst(node->function.args[i], depth + 1);
+            }
+            break;
+        case NODE_TYPE_WINDOW_FUNCTION:
+            printf("WINDOW FUNCTION: %s\n", node->window_function.name);
+            for (int i = 0; i < node->window_function.arg_count; i++) {
+                printAst(node->window_function.args[i], depth + 1);
+            }
+            if (node->window_function.partition_count > 0) {
+                print_indent(depth + 1);
+                printf("PARTITION BY: ");
+                for (int i = 0; i < node->window_function.partition_count; i++) {
+                    printf("%s%s", i > 0 ? ", " : "", node->window_function.partition_by[i]);
+                }
+                printf("\n");
+            }
+            if (node->window_function.order_by_column) {
+                print_indent(depth + 1);
+                printf("ORDER BY: %s %s\n", node->window_function.order_by_column,
+                       node->window_function.order_descending ? "DESC" : "ASC");
             }
             break;
         case NODE_TYPE_LIST:
