@@ -14,6 +14,7 @@ jobs:
     name: Build with zig
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: true
       matrix:
         target:  # Valid zig targets here
           - aarch64-linux

@@ -14,7 +14,7 @@ pub fn main() !u8 {
     try utils.filterFilesInDir(gpa, try std.fmt.allocPrint(gpa, "./zig/zig-out/tests-{s}", .{target}), &exeFiles, null);
     var retCode: u8 = 0;
     for (exeFiles.items) |cf| {
-        var child = std.process.Child.init(&[_][]const u8{exeFiles.items[0]}, gpa);
+        var child = std.process.Child.init(&[_][]const u8{cf}, gpa);
         try child.spawn();
         const term = try child.wait();
         if (term.Exited != 0) {
