@@ -1,6 +1,6 @@
 # cq - High-Performance SQL Query Engine for CSV Files
 
-[![Build and Test](https://github.com/iworokonit/cq/workflows/Build%20and%20Test%20on%20Multiple%20Platforms/badge.svg)](https://github.com/iworokonit/cq/actions)
+[![Build and Test on Multiple Platforms](https://github.com/baldimario/cq/actions/workflows/build-multi-platform.yml/badge.svg)](https://github.com/baldimario/cq/actions/workflows/build-multi-platform.yml)
 
 A lightweight, fast SQL query processor written in C that enables executing SQL queries directly on CSV files without requiring a database. Features include joins, subqueries, aggregations, arithmetic expressions, and more.
 
@@ -698,6 +698,20 @@ FROM orders.csv
 - PARTITION BY divides rows into groups (optional)
 - Window functions are evaluated after WHERE, GROUP BY, and HAVING
 - Multiple window functions can be used in the same query
+- LAG/LEAD respect ORDER BY within partitions
+- Running aggregates (SUM, AVG, COUNT) are cumulative and progressive
+
+**Examples:**
+```bash
+# Basic window function
+./build/cq -q "SELECT name, age, ROW_NUMBER() OVER (ORDER BY age) AS row_num FROM 'data/users.csv' ORDER BY age" -p
+
+# Running sum
+./build/cq -q "SELECT name, age, SUM(age) OVER (ORDER BY age) AS running_sum FROM 'data/users.csv' ORDER BY age" -p
+
+# PARTITION BY with LAG
+./build/cq -q "SELECT role, name, age, LAG(age) OVER (PARTITION BY role ORDER BY age) AS prev_age FROM 'data/users.csv'" -p
+```
 
 #### Nested Functions
 ```sql
@@ -1120,9 +1134,9 @@ make address_sanitizer
 - Read queries from stdin (piping support)
 - SQL comments (-- and /* */)
 - CASE expressions (simple and searched)
+- Window functions (ROW_NUMBER, RANK, DENSE_RANK, LAG, LEAD, running aggregates)
 
 ### Planned Features
-- [ ] Window functions (ROW_NUMBER, RANK)
 - [ ] Index support for large files
 - [ ] Query optimization
 

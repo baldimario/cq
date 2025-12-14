@@ -9,7 +9,7 @@
 void test_row_number() {
     printf("Test: ROW_NUMBER() window function...\n");
     
-    const char* query = "SELECT name, age, ROW_NUMBER() OVER (ORDER BY age) AS row_num FROM 'data/users.csv'";
+    const char* query = "SELECT name, age, ROW_NUMBER() OVER (ORDER BY age) AS row_num FROM 'data/users.csv' ORDER BY age";
     ASTNode* ast = parse(query);
     assert(ast != NULL);
     
@@ -18,7 +18,7 @@ void test_row_number() {
     assert(result->row_count > 0);
     assert(result->column_count == 3);
     
-    // check that row numbers are sequential 1, 2, 3, ...
+    // check that row numbers are sequential 1, 2, 3, ... (since we ORDER BY age)
     for (int i = 0; i < result->row_count; i++) {
         assert(result->rows[i].values[2].type == VALUE_TYPE_INTEGER);
         assert(result->rows[i].values[2].int_value == i + 1);
@@ -59,7 +59,7 @@ void test_row_number_partition() {
 void test_rank() {
     printf("Test: RANK() window function...\n");
     
-    const char* query = "SELECT name, age, RANK() OVER (ORDER BY age) AS rnk FROM 'data/users.csv'";
+    const char* query = "SELECT name, age, RANK() OVER (ORDER BY age) AS rnk FROM 'data/users.csv' ORDER BY age";
     ASTNode* ast = parse(query);
     assert(ast != NULL);
     
@@ -68,7 +68,7 @@ void test_rank() {
     assert(result->row_count > 0);
     assert(result->column_count == 3);
     
-    // ranks should be monotonically increasing
+    // ranks should be monotonically increasing (since ordered by age)
     for (int i = 1; i < result->row_count; i++) {
         assert(result->rows[i].values[2].int_value >= result->rows[i-1].values[2].int_value);
     }
@@ -81,7 +81,7 @@ void test_rank() {
 void test_dense_rank() {
     printf("Test: DENSE_RANK() window function...\n");
     
-    const char* query = "SELECT name, age, DENSE_RANK() OVER (ORDER BY age) AS drnk FROM 'data/users.csv'";
+    const char* query = "SELECT name, age, DENSE_RANK() OVER (ORDER BY age) AS drnk FROM 'data/users.csv' ORDER BY age";
     ASTNode* ast = parse(query);
     assert(ast != NULL);
     
@@ -106,9 +106,9 @@ void test_dense_rank() {
 }
 
 void test_lag() {
-    printf("Test: LAG() window function...\n");
+    printf("Test: LAG() window function with ORDER BY...\n");
     
-    const char* query = "SELECT name, age, LAG(age) OVER (ORDER BY age) AS prev_age FROM 'data/users.csv'";
+    const char* query = "SELECT name, age, LAG(age) OVER (ORDER BY age) AS prev_age FROM 'data/users.csv' ORDER BY age";
     ASTNode* ast = parse(query);
     assert(ast != NULL);
     
@@ -117,30 +117,27 @@ void test_lag() {
     assert(result->row_count > 0);
     assert(result->column_count == 3);
     
-    // first row should have NULL for LAG (once rows are properly ordered)
-    // For now, just check that LAG values exist and function doesn't crash
-    int null_count = 0;
-    int value_count = 0;
-    for (int i = 0; i < result->row_count; i++) {
-        if (result->rows[i].values[2].type == VALUE_TYPE_NULL) {
-            null_count++;
-        } else {
-            value_count++;
+    // Verify ORDER BY is working: first row (youngest) should have NULL
+    assert(result->rows[0].values[2].type == VALUE_TYPE_NULL);
+    
+    // Subsequent rows should have LAG values that are <= current age
+    for (int i = 1; i < result->row_count; i++) {
+        if (result->rows[i].values[2].type != VALUE_TYPE_NULL) {
+            long long prev_age = result->rows[i].values[2].int_value;
+            long long curr_age = result->rows[i].values[1].int_value;
+            assert(prev_age <= curr_age); // LAG should return previous age which is <= current
         }
     }
     
-    assert(null_count > 0); // at least one NULL (first row in ordered sequence)
-    assert(value_count > 0); // at least some values
-    
-    printf("  PASS (%d rows, %d NULLs, %d values)\n", result->row_count, null_count, value_count);
+    printf("  PASS (%d rows, ORDER BY working correctly)\n", result->row_count);
     csv_free(result);
     releaseNode(ast);
 }
 
 void test_lead() {
-    printf("Test: LEAD() window function...\n");
+    printf("Test: LEAD() window function with ORDER BY...\n");
     
-    const char* query = "SELECT name, age, LEAD(age) OVER (ORDER BY age) AS next_age FROM 'data/users.csv'";
+    const char* query = "SELECT name, age, LEAD(age) OVER (ORDER BY age) AS next_age FROM 'data/users.csv' ORDER BY age";
     ASTNode* ast = parse(query);
     assert(ast != NULL);
     
@@ -149,22 +146,19 @@ void test_lead() {
     assert(result->row_count > 0);
     assert(result->column_count == 3);
     
-    // last row should have NULL for LEAD (once rows are properly ordered)
-    // For now, just check that LEAD values exist and function doesn't crash
-    int null_count = 0;
-    int value_count = 0;
-    for (int i = 0; i < result->row_count; i++) {
-        if (result->rows[i].values[2].type == VALUE_TYPE_NULL) {
-            null_count++;
-        } else {
-            value_count++;
+    // Verify ORDER BY is working: last row (oldest) should have NULL
+    assert(result->rows[result->row_count - 1].values[2].type == VALUE_TYPE_NULL);
+    
+    // Other rows should have LEAD values that are >= current age
+    for (int i = 0; i < result->row_count - 1; i++) {
+        if (result->rows[i].values[2].type != VALUE_TYPE_NULL) {
+            long long next_age = result->rows[i].values[2].int_value;
+            long long curr_age = result->rows[i].values[1].int_value;
+            assert(next_age >= curr_age); // LEAD should return next age which is >= current
         }
     }
     
-    assert(null_count > 0); // at least one NULL (last row in ordered sequence)
-    assert(value_count > 0); // at least some values
-    
-    printf("  PASS (%d rows, %d NULLs, %d values)\n", result->row_count, null_count, value_count);
+    printf("  PASS (%d rows, ORDER BY working correctly)\n", result->row_count);
     csv_free(result);
     releaseNode(ast);
 }
@@ -172,16 +166,16 @@ void test_lead() {
 void test_sum_over() {
     printf("Test: SUM() OVER window function (running sum)...\n");
     
-    const char* query = "SELECT name, age, SUM(age) OVER (ORDER BY age) AS running_sum FROM 'data/users.csv'";
+    const char* query = "SELECT name, age, SUM(age) OVER (ORDER BY age) AS running_sum FROM 'data/users.csv' ORDER BY age";
     ASTNode* ast = parse(query);
     assert(ast != NULL);
     
     ResultSet* result = evaluate_query(ast);
     assert(result != NULL);
-    assert(result->row_count > 0);
+    assert(result->row_count > 5); // should have multiple rows
     assert(result->column_count == 3);
     
-    // running sum should be monotonically increasing
+    // running sum should be monotonically increasing (since ordered by age)
     for (int i = 1; i < result->row_count; i++) {
         if (result->rows[i].values[2].type == VALUE_TYPE_INTEGER) {
             assert(result->rows[i].values[2].int_value >= result->rows[i-1].values[2].int_value);
@@ -190,7 +184,7 @@ void test_sum_over() {
         }
     }
     
-    printf("  PASS (%d rows)\n", result->row_count);
+    printf("  PASS (%d rows, progressive running sum)\n", result->row_count);
     csv_free(result);
     releaseNode(ast);
 }
@@ -198,21 +192,21 @@ void test_sum_over() {
 void test_count_over() {
     printf("Test: COUNT() OVER window function (running count)...\n");
     
-    const char* query = "SELECT name, COUNT(*) OVER (ORDER BY age) AS running_count FROM 'data/users.csv'";
+    const char* query = "SELECT name, age, COUNT(*) OVER (ORDER BY age) AS running_count FROM 'data/users.csv' ORDER BY age";
     ASTNode* ast = parse(query);
     assert(ast != NULL);
     
     ResultSet* result = evaluate_query(ast);
     assert(result != NULL);
-    assert(result->row_count > 0);
-    assert(result->column_count == 2);
+    assert(result->row_count > 5); // should have multiple rows
+    assert(result->column_count == 3);
     
-    // running count should be monotonically increasing
+    // running count should be monotonically increasing and match position
     for (int i = 0; i < result->row_count; i++) {
-        assert(result->rows[i].values[1].int_value >= i + 1);
+        assert(result->rows[i].values[2].int_value == i + 1);
     }
     
-    printf("  PASS (%d rows)\n", result->row_count);
+    printf("  PASS (%d rows, progressive running count)\n", result->row_count);
     csv_free(result);
     releaseNode(ast);
 }
