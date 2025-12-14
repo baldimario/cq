@@ -63,8 +63,6 @@ pub fn buildFor(allocator: std.mem.Allocator, info: *const BuildInfo) !*std.Buil
 
     try addCFilesFromDir(b, exe, "../src", excludedMainSrcIfLib);
 
-    // TODO: resolve sub-directory at more level too
-    try addCFilesFromDir(b, exe, "../src/external", excludedMainSrcIfLib);
     const postifix = if (!isLib) "" else "_lib";
     const install_prefix = try std.fmt.allocPrint(allocator, "{s}-{s}{s}", .{ @tagName(target.result.cpu.arch), @tagName(target.result.os.tag), postifix });
     const art = b.addInstallArtifact(exe, .{});
@@ -74,7 +72,7 @@ pub fn buildFor(allocator: std.mem.Allocator, info: *const BuildInfo) !*std.Buil
 }
 
 pub fn addCFilesFromDir(b: *std.Build, exe: *std.Build.Step.Compile, dir_path: []const u8, exclude_path: ?[]const u8) !void {
-    var dir = try std.fs.cwd().openDir(dir_path, .{ .iterate = true });
+    var dir = try std.fs.cwd().openDir(dir_path, .{ .iterate = true, .access_sub_paths = true });
     defer dir.close();
     const fullExcludedPath = if (exclude_path != null) try std.fmt.allocPrint(b.allocator, "{s}/{s}", .{ dir_path, exclude_path.? }) else null;
 
@@ -92,6 +90,10 @@ pub fn addCFilesFromDir(b: *std.Build, exe: *std.Build.Step.Compile, dir_path: [
                 .file = b.path(full_path),
                 .flags = &.{},
             });
+        } else if (entry.kind == .directory) {
+            const newPath = try std.fs.path.join(b.allocator, &[_][]const u8{ dir_path, entry.name });
+            try addCFilesFromDir(b, exe, newPath, exclude_path);
+            defer b.allocator.free(newPath);
         }
     }
     if (fullExcludedPath != null) {
