@@ -52,7 +52,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cq_${{matrix.target}}
-          path: releases/cq_${{matrix.target}}.zip
+          path: releases/cq_${{matrix.target}}-${{github.ref_name}}.zip
 
       # Create the .zip release containing the libs (static and shared) and upload as artifact
       - name: Create zip release for libs ${{matrix.target}}
@@ -66,7 +66,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: libcq_${{matrix.target}}
-          path: releases/libcq_${{matrix.target}}-.zip
+          path: releases/libcq_${{matrix.target}}-${{github.ref_name}}.zip
   
   release:
     name: Publish
