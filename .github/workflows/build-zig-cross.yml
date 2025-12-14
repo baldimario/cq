@@ -24,6 +24,48 @@ jobs:
           release_name: Release ${{ github.ref }}
           draft: false
           prerelease: false
+  
+  upload_release:
+    needs: ["build", "create_release"]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:  # Valid zig targets here
+          - aarch64-linux
+          - x86_64-linux
+          - aarch64-macos
+          - x86_64-macos
+          - x86_64-windows
+    steps:
+      - name: Download bin artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: cq_${{matrix.target}}
+      - name: Download bin artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: libcq_${{matrix.target}}
+      - name: Upload Release cq_${{matrix.target}}
+        id: upload-release-asset-bin
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_path: zig/zig-out/${{matrix.target}}/cq_${{matrix.target}}.zip
+          asset_name: cq_${{matrix.target}}_${{github.ref_name}}.zip
+          asset_content_type: application/zip
+
+      - name: Upload Release libcq_${{matrix.target}}
+        id: upload-release-asset-lib 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_path: zig/zig-out/${{matrix.target}}_lib/libcq_${{matrix.target}}.zip
+          asset_name: libcq_${{matrix.target}}_${{github.ref_name}}.zip
+          asset_content_type: application/zip
 
   build:
     name: Build with zig
@@ -73,26 +115,8 @@ jobs:
           filename: 'libcq_${{matrix.target}}.zip'
           directory: zig/zig-out/${{matrix.target}}_lib/
 
-      - name: Upload Release cq_${{matrix.target}}
-        id: upload-release-asset-bin
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create_release.outputs.upload_url }}
-          asset_path: zig/zig-out/${{matrix.target}}/cq_${{matrix.target}}.zip
-          asset_name: cq_${{matrix.target}}_${{github.ref_name}}.zip
-          asset_content_type: application/zip
-
-      - name: Upload Release libcq_${{matrix.target}}
-        id: upload-release-asset-lib 
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create_release.outputs.upload_url }}
-          asset_path: zig/zig-out/${{matrix.target}}_lib/libcq_${{matrix.target}}.zip
-          asset_name: libcq_${{matrix.target}}_${{github.ref_name}}.zip
-          asset_content_type: application/zip
+      
+    
+        
 
       

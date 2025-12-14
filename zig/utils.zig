@@ -38,7 +38,7 @@ pub const BuildInfo = struct {
     out: ?struct { prefix: []const u8 } = null,
 };
 
-pub fn buildFor(allocator: std.mem.Allocator, info: *const BuildInfo) !void {
+pub fn buildFor(allocator: std.mem.Allocator, info: *const BuildInfo) !*std.Build.Step.Compile {
     const b = info.build;
     const target = info.target;
 
@@ -70,6 +70,7 @@ pub fn buildFor(allocator: std.mem.Allocator, info: *const BuildInfo) !void {
     const art = b.addInstallArtifact(exe, .{});
     art.dest_dir = .{ .custom = install_prefix };
     b.getInstallStep().dependOn(&art.step);
+    return exe;
 }
 
 pub fn addCFilesFromDir(b: *std.Build, exe: *std.Build.Step.Compile, dir_path: []const u8, exclude_path: ?[]const u8) !void {
@@ -95,5 +96,37 @@ pub fn addCFilesFromDir(b: *std.Build, exe: *std.Build.Step.Compile, dir_path: [
     }
     if (fullExcludedPath != null) {
         defer b.allocator.free(fullExcludedPath.?);
+    }
+}
+
+pub fn getFilesInDir(allocator: std.mem.Allocator, dir_path: []const u8, outSrcs: *std.ArrayList([]const u8), outHeaders: *std.ArrayList([]const u8)) !void {
+    var dir = try std.fs.cwd().openDir(dir_path, .{ .iterate = true });
+    defer dir.close();
+
+    var it = dir.iterate();
+    while (try it.next()) |entry| {
+        if (entry.kind == .file) {
+            if (std.mem.endsWith(u8, entry.name, ".c")) {
+                const full_path = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ dir_path, entry.name });
+                try outSrcs.append(allocator, full_path);
+            } else if (std.mem.endsWith(u8, entry.name, ".h")) {
+                const full_path = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ dir_path, entry.name });
+                try outHeaders.append(allocator, full_path);
+            }
+        }
+    }
+}
+
+pub fn filterFilesInDir(allocator: std.mem.Allocator, dir_path: []const u8, out: *std.ArrayList([]const u8), filter: ?fn (path: []u8) bool) !void {
+    var dir = try std.fs.cwd().openDir(dir_path, .{ .iterate = true });
+    defer dir.close();
+
+    var it = dir.iterate();
+    while (try it.next()) |entry| {
+        if (entry.kind == .file) {
+            if (filter == null or filter.?(entry.name)) {
+                try out.append(allocator, try std.fmt.allocPrint(allocator, "{s}/{s}", .{ dir_path, entry.name }));
+            }
+        }
     }
 }
