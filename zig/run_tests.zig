@@ -8,9 +8,6 @@ pub fn main() !u8 {
     const target = args[1];
     var exeFiles = try std.ArrayList([]const u8).initCapacity(gpa, 0);
     defer exeFiles.deinit(gpa);
-    //const cwdPath = try std.fs.cwd().realpathAlloc(gpa, ".");
-    //defer gpa.free(cwdPath);
-    //std.debug.print("{s}", .{cwdPath});
     try utils.filterFilesInDir(gpa, try std.fmt.allocPrint(gpa, "./zig/zig-out/tests-{s}", .{target}), &exeFiles, null);
     var retCode: u8 = 0;
     var failTests = try std.ArrayList([]const u8).initCapacity(gpa, 0);
@@ -21,16 +18,16 @@ pub fn main() !u8 {
         const term = try child.wait();
         if (term.Exited != 0) {
             retCode = 1;
-            try failTests.append(gpa, cf);
+            try failTests.append(gpa, std.fs.path.basename(cf));
         }
-        std.debug.print("{s} = exit {}\n", .{ cf, term.Exited });
+        utils.print("{s} = exit {}\n", .{ cf, term.Exited }, if (term.Exited == 0) .reset else .red);
     }
     if (failTests.items.len != 0) {
-        std.debug.print("Following tests file are failed\n", .{});
+        utils.print("Following file are failing tests \n", .{}, .red);
         for (failTests.items) |it| {
-            std.debug.print("{s}\n", .{it});
+            utils.print("\t{s}\n", .{it}, .red);
         }
     }
-    std.debug.print("Return code: {}\n", .{retCode});
+    utils.print("Return code: {}\n", .{retCode}, if (retCode == 0) .reset else .red);
     return retCode;
 }

@@ -38,6 +38,24 @@ pub const BuildInfo = struct {
     out: ?struct { prefix: []const u8 } = null,
 };
 
+pub const TermColor = enum(u8) {
+    reset,
+    red,
+
+    pub fn str(self: TermColor) []const u8 {
+        return switch (self) {
+            .reset => "\x1b[0m",
+            .red => "\x1b[31m",
+        };
+    }
+};
+
+pub fn print(comptime fmt: []const u8, args: anytype, color: TermColor) void {
+    std.debug.print("{s}", .{color.str()});
+    std.debug.print(fmt, args);
+    std.debug.print("{s}\n", .{TermColor.reset.str()});
+}
+
 pub fn buildFor(allocator: std.mem.Allocator, info: *const BuildInfo) !*std.Build.Step.Compile {
     const b = info.build;
     const target = info.target;
