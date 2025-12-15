@@ -62,11 +62,15 @@ cq -q "UPDATE 'data/users.csv' SET role = 'admin', active = 1 WHERE age > 25"
 # DELETE - Remove rows (WHERE clause required for safety)
 cq -q "DELETE FROM 'data/users.csv' WHERE active = 0"
 cq -q "DELETE FROM 'data/users.csv' WHERE age < 18"
+
+# DELETE all rows (requires --force flag)
+cq -q "DELETE FROM 'data/users.csv'" --force
 ```
 
 **Notes:**
 - All DML operations modify the CSV file in-place
 - DELETE requires WHERE clause (safety measure to prevent accidental data loss)
+- Use --force flag to allow DELETE without WHERE clause (deletes all rows)
 - Use quotes around file paths with special characters: `'data/file.csv'`
 - Column names in INSERT are optional if providing all values in order
 
@@ -455,6 +459,7 @@ Options:
   -v              Print results in vertical format (one column per line)
   -s <char>       Field separator for input CSV (default: ',')
   -d <char>       Output delimiter for -o option (default: ',')
+  -F, --force     Allow DELETE without WHERE clause
 
 Examples:
   # Print formatted table
