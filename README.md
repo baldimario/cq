@@ -1139,6 +1139,12 @@ make address_sanitizer
 ### Planned Features
 - [ ] Index support for large files
 - [ ] Query optimization
+- [ ] Watch mode (cq --watch "SELECT * FROM access.log WHERE status=500")
+- [ ] Output formatter (cq -o json "SELECT * FROM users.csv" | jq; cq -o yaml "SELECT * FROM config.csv" | yq)
+- [ ] Remote streaming (cq "SELECT * FROM https://website/export.csv WHERE year=2024"; cq "SELECT * FROM s3://bucket/data.csv LIMIT 100")
+- [ ] Interactive REPL (cq --interactive)
+- [ ] Git versioned data query (cq --git HEAD~5 "SELECT * FROM users.csv WHERE active=true")
+- [ ] Date type support
 
 ## 🔗 Additional Resources
 
