@@ -25,10 +25,23 @@ void value_deep_copy(Value* dst, const Value* src) {
     if (!dst || !src) return;
     
     dst->type = src->type;
-    if (src->type == VALUE_TYPE_STRING && src->string_value) {
-        dst->string_value = strdup(src->string_value);
-    } else {
-        dst->int_value = src->int_value;  // covers the whole union
+    
+    switch (src->type) {
+        case VALUE_TYPE_NULL:
+            dst->int_value = 0;
+            break;
+        case VALUE_TYPE_INTEGER:
+            dst->int_value = src->int_value;
+            break;
+        case VALUE_TYPE_DOUBLE:
+            dst->double_value = src->double_value;
+            break;
+        case VALUE_TYPE_DATE:
+            dst->date_value = src->date_value;  // struct copy
+            break;
+        case VALUE_TYPE_STRING:
+            dst->string_value = src->string_value ? strdup(src->string_value) : NULL;
+            break;
     }
 }
 
@@ -358,13 +371,15 @@ ResultSet* build_result(QueryContext* ctx, Row** filtered_rows, int row_count) {
                         result->rows[i].values[j].type = VALUE_TYPE_NULL;
                     } else {
                         // evaluate any expression like identifier, binary_op, function, etc.
-                        result->rows[i].values[j] = evaluate_expression(ctx, col_node, filtered_rows[i], 0);
+                        Value tmp = evaluate_expression(ctx, col_node, filtered_rows[i], 0);
+                        result->rows[i].values[j] = value_copy(&tmp);
                     }
                 } else {
                     // regular column from table or string-based expression
-                    result->rows[i].values[j] = evaluate_column_expression(
+                    Value tmp = evaluate_column_expression(
                         expanded_specs[j], ctx, filtered_rows[i], column_indices, j
                     );
+                    result->rows[i].values[j] = value_copy(&tmp);
                 }
             }
         }
@@ -492,12 +507,14 @@ ResultSet* build_result(QueryContext* ctx, Row** filtered_rows, int row_count) {
                     result->rows[i].values[j].type = VALUE_TYPE_NULL;
                 } else {
                     // evaluate any expression like identifier, binary_op, function, etc.
-                    result->rows[i].values[j] = evaluate_expression(ctx, col_node, filtered_rows[i], 0);
+                    Value tmp = evaluate_expression(ctx, col_node, filtered_rows[i], 0);
+                    result->rows[i].values[j] = value_copy(&tmp);
                 }
             } else {
-                result->rows[i].values[j] = evaluate_column_expression(
+                Value tmp = evaluate_column_expression(
                     column_specs[j], ctx, filtered_rows[i], column_indices, j
                 );
+                result->rows[i].values[j] = value_copy(&tmp);
             }
         }
     }

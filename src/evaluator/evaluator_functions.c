@@ -6,6 +6,8 @@
 #include <math.h>
 #include "evaluator.h"
 #include "evaluator/evaluator_functions.h"
+#include "utils.h"
+#include "date_utils.h"
 
 /* helper function to transform string case */
 static char* transform_string_case(const char* str, bool to_upper) {
@@ -301,7 +303,7 @@ Value evaluate_scalar_function(const char* func_name, Value* args, int arg_count
         return result;
     }
     
-    // EXP(number) - e^x
+    // EXP(number) e^x
     if (strcasecmp(func_name, "EXP") == 0) {
         double val = 0;
         if (args[0].type == VALUE_TYPE_INTEGER) {
@@ -317,7 +319,7 @@ Value evaluate_scalar_function(const char* func_name, Value* args, int arg_count
         return result;
     }
     
-    // LN(number) - natural logarithm
+    // LN(number) natural logarithm
     if (strcasecmp(func_name, "LN") == 0 || strcasecmp(func_name, "LOG") == 0) {
         double val = 0;
         if (args[0].type == VALUE_TYPE_INTEGER) {
@@ -372,6 +374,167 @@ Value evaluate_scalar_function(const char* func_name, Value* args, int arg_count
             result.double_value = fmod(dividend, divisor);
             return result;
         }
+    }
+    
+    // DATE parse date string
+    if (strcasecmp(func_name, "DATE") == 0) {
+        if (args[0].type == VALUE_TYPE_STRING && args[0].string_value) {
+            DateValue date;
+            if (parse_date(args[0].string_value, &date)) {
+                result.type = VALUE_TYPE_DATE;
+                result.date_value = date;
+            }
+        } else if (args[0].type == VALUE_TYPE_DATE) {
+            // already a date, just return it
+            result = args[0];
+        }
+        return result;
+    }
+    
+    // CURRENT_DATE
+    if (strcasecmp(func_name, "CURRENT_DATE") == 0) {
+        result.type = VALUE_TYPE_DATE;
+        result.date_value = current_date();
+        return result;
+    }
+    
+    // YEAR
+    if (strcasecmp(func_name, "YEAR") == 0) {
+        if (args[0].type == VALUE_TYPE_DATE) {
+            result.type = VALUE_TYPE_INTEGER;
+            result.int_value = date_get_year(args[0].date_value);
+        }
+        return result;
+    }
+    
+    // MONTH
+    if (strcasecmp(func_name, "MONTH") == 0) {
+        if (args[0].type == VALUE_TYPE_DATE) {
+            result.type = VALUE_TYPE_INTEGER;
+            result.int_value = date_get_month(args[0].date_value);
+        }
+        return result;
+    }
+    
+    // DAY
+    if (strcasecmp(func_name, "DAY") == 0) {
+        if (args[0].type == VALUE_TYPE_DATE) {
+            result.type = VALUE_TYPE_INTEGER;
+            result.int_value = date_get_day(args[0].date_value);
+        }
+        return result;
+    }
+    
+    // DAYOFWEEK
+    if (strcasecmp(func_name, "DAYOFWEEK") == 0) {
+        if (args[0].type == VALUE_TYPE_DATE) {
+            result.type = VALUE_TYPE_INTEGER;
+            result.int_value = date_get_dayofweek(args[0].date_value);
+        }
+        return result;
+    }
+    
+    // DAYOFYEAR
+    if (strcasecmp(func_name, "DAYOFYEAR") == 0) {
+        if (args[0].type == VALUE_TYPE_DATE) {
+            result.type = VALUE_TYPE_INTEGER;
+            result.int_value = date_get_dayofyear(args[0].date_value);
+        }
+        return result;
+    }
+    
+    // DATE_ADD(date, interval, unit)
+    if (strcasecmp(func_name, "DATE_ADD") == 0 && arg_count >= 3) {
+        if (args[0].type == VALUE_TYPE_DATE && 
+            args[1].type == VALUE_TYPE_INTEGER &&
+            args[2].type == VALUE_TYPE_STRING) {
+            
+            DateValue date = args[0].date_value;
+            int interval = (int)args[1].int_value;
+            const char* unit = args[2].string_value;
+            
+            if (strcasecmp(unit, "DAYS") == 0 || strcasecmp(unit, "DAY") == 0) {
+                result.type = VALUE_TYPE_DATE;
+                result.date_value = date_add_days(date, interval);
+            } else if (strcasecmp(unit, "MONTHS") == 0 || strcasecmp(unit, "MONTH") == 0) {
+                result.type = VALUE_TYPE_DATE;
+                result.date_value = date_add_months(date, interval);
+            } else if (strcasecmp(unit, "YEARS") == 0 || strcasecmp(unit, "YEAR") == 0) {
+                result.type = VALUE_TYPE_DATE;
+                result.date_value = date_add_years(date, interval);
+            }
+        }
+        return result;
+    }
+    
+    // DATE_SUB(date, interval, unit)
+    if (strcasecmp(func_name, "DATE_SUB") == 0 && arg_count >= 3) {
+        if (args[0].type == VALUE_TYPE_DATE && 
+            args[1].type == VALUE_TYPE_INTEGER &&
+            args[2].type == VALUE_TYPE_STRING) {
+            
+            DateValue date = args[0].date_value;
+            int interval = -(int)args[1].int_value;  // negate for subtraction
+            const char* unit = args[2].string_value;
+            
+            if (strcasecmp(unit, "DAYS") == 0 || strcasecmp(unit, "DAY") == 0) {
+                result.type = VALUE_TYPE_DATE;
+                result.date_value = date_add_days(date, interval);
+            } else if (strcasecmp(unit, "MONTHS") == 0 || strcasecmp(unit, "MONTH") == 0) {
+                result.type = VALUE_TYPE_DATE;
+                result.date_value = date_add_months(date, interval);
+            } else if (strcasecmp(unit, "YEARS") == 0 || strcasecmp(unit, "YEAR") == 0) {
+                result.type = VALUE_TYPE_DATE;
+                result.date_value = date_add_years(date, interval);
+            }
+        }
+        return result;
+    }
+    
+    // DATE_DIFF(date1, date2, unit)
+    if (strcasecmp(func_name, "DATE_DIFF") == 0 && arg_count >= 3) {
+        if (args[0].type == VALUE_TYPE_DATE && 
+            args[1].type == VALUE_TYPE_DATE &&
+            args[2].type == VALUE_TYPE_STRING) {
+            
+            DateValue date1 = args[0].date_value;
+            DateValue date2 = args[1].date_value;
+            const char* unit = args[2].string_value;
+            
+            result.type = VALUE_TYPE_INTEGER;
+            if (strcasecmp(unit, "DAYS") == 0 || strcasecmp(unit, "DAY") == 0) {
+                result.int_value = date_diff_days(date1, date2);
+            } else if (strcasecmp(unit, "MONTHS") == 0 || strcasecmp(unit, "MONTH") == 0) {
+                result.int_value = date_diff_months(date1, date2);
+            } else if (strcasecmp(unit, "YEARS") == 0 || strcasecmp(unit, "YEAR") == 0) {
+                result.int_value = date_diff_years(date1, date2);
+            }
+        }
+        return result;
+    }
+    
+    // DATE_FORMAT(date, format_string)
+    if (strcasecmp(func_name, "DATE_FORMAT") == 0 && arg_count >= 2) {
+        if (args[0].type == VALUE_TYPE_DATE && 
+            args[1].type == VALUE_TYPE_STRING && args[1].string_value) {
+            
+            DateFormat format = DATE_FORMAT_ISO;
+            const char* fmt = args[1].string_value;
+            
+            if (strcasecmp(fmt, "ISO") == 0 || strcasecmp(fmt, "YYYY-MM-DD") == 0) {
+                format = DATE_FORMAT_ISO;
+            } else if (strcasecmp(fmt, "US") == 0 || strcasecmp(fmt, "MM/DD/YYYY") == 0) {
+                format = DATE_FORMAT_US;
+            } else if (strcasecmp(fmt, "EU") == 0 || strcasecmp(fmt, "DD/MM/YYYY") == 0) {
+                format = DATE_FORMAT_EU;
+            } else if (strcasecmp(fmt, "COMPACT") == 0 || strcasecmp(fmt, "YYYYMMDD") == 0) {
+                format = DATE_FORMAT_COMPACT;
+            }
+            
+            result.type = VALUE_TYPE_STRING;
+            result.string_value = format_date(args[0].date_value, format);
+        }
+        return result;
     }
     
     return result;

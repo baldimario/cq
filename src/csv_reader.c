@@ -9,6 +9,8 @@
 
 #include "csv_reader.h"
 #include "string_utils.h"
+#include "utils.h"
+#include "date_utils.h"
 #include "mmap.h"
 
 
@@ -85,6 +87,8 @@ char* value_to_string(Value* value) {
         case VALUE_TYPE_DOUBLE:
             snprintf(buffer, sizeof(buffer), "%.2f", value->double_value);
             return strdup(buffer);
+        case VALUE_TYPE_DATE:
+            return format_date(value->date_value, DATE_FORMAT_ISO);
         case VALUE_TYPE_STRING:
             return strdup(value->string_value ? value->string_value : "");
     }
@@ -98,6 +102,11 @@ int value_compare(Value* a, Value* b) {
     if (a->type == VALUE_TYPE_NULL && b->type == VALUE_TYPE_NULL) return 0;
     if (a->type == VALUE_TYPE_NULL) return -1;
     if (b->type == VALUE_TYPE_NULL) return 1;
+    
+    // handle date comparisons
+    if (a->type == VALUE_TYPE_DATE && b->type == VALUE_TYPE_DATE) {
+        return compare_dates(a->date_value, b->date_value);
+    }
     
     // handle numeric comparisons (int vs int, double vs double, int vs double)
     if ((a->type == VALUE_TYPE_INTEGER || a->type == VALUE_TYPE_DOUBLE) &&
@@ -123,6 +132,28 @@ int value_compare(Value* a, Value* b) {
 /* ===== type inference ===== */
 static ValueType infer_type(const char* str, size_t len) {
     if (len == 0) return VALUE_TYPE_NULL;
+    
+    // try to parse as date first (YYYY-MM-DD format)
+    if (len >= 8 && len <= 10) {
+        char date_str[32];
+        if (len < sizeof(date_str)) {
+            memcpy(date_str, str, len);
+            date_str[len] = '\0';
+            
+            // trim whitespace
+            char* trimmed = date_str;
+            while (*trimmed && isspace(*trimmed)) trimmed++;
+            size_t trimmed_len = strlen(trimmed);
+            while (trimmed_len > 0 && isspace(trimmed[trimmed_len - 1])) {
+                trimmed[--trimmed_len] = '\0';
+            }
+            
+            DateValue date;
+            if (parse_date(trimmed, &date)) {
+                return VALUE_TYPE_DATE;
+            }
+        }
+    }
     
     // check if it's a number
     bool has_dot = false;
@@ -163,6 +194,8 @@ static ValueType infer_type(const char* str, size_t len) {
 
 Value parse_value(const char* str, size_t len) {
     Value value;
+    value.type = VALUE_TYPE_NULL;  // initialize
+    value.int_value = 0;  // initialize union
     
     ValueType type = infer_type(str, len);
     value.type = type;
@@ -176,6 +209,27 @@ Value parse_value(const char* str, size_t len) {
         case VALUE_TYPE_DOUBLE:
             value.double_value = strtod(str, NULL);
             break;
+        case VALUE_TYPE_DATE: {
+            char date_str[32];
+            if (len < sizeof(date_str)) {
+                memcpy(date_str, str, len);
+                date_str[len] = '\0';
+                
+                // trim whitespace
+                char* trimmed = date_str;
+                while (*trimmed && isspace(*trimmed)) trimmed++;
+                size_t trimmed_len = strlen(trimmed);
+                while (trimmed_len > 0 && isspace(trimmed[trimmed_len - 1])) {
+                    trimmed[--trimmed_len] = '\0';
+                }
+                
+                if (!parse_date(trimmed, &value.date_value)) {
+                    // fallback to null if parse fails
+                    value.type = VALUE_TYPE_NULL;
+                }
+            }
+            break;
+        }
         case VALUE_TYPE_STRING:
             value.string_value = cq_strndup(str, len);
             trim_whitespace(value.string_value);
@@ -183,6 +237,32 @@ Value parse_value(const char* str, size_t len) {
     }
     
     return value;
+}
+
+/* deep copy a value */
+Value value_copy(const Value* src) {
+    Value dst;
+    dst.type = src->type;
+    
+    switch (src->type) {
+        case VALUE_TYPE_NULL:
+            dst.int_value = 0;
+            break;
+        case VALUE_TYPE_INTEGER:
+            dst.int_value = src->int_value;
+            break;
+        case VALUE_TYPE_DOUBLE:
+            dst.double_value = src->double_value;
+            break;
+        case VALUE_TYPE_DATE:
+            dst.date_value = src->date_value;  // struct copy
+            break;
+        case VALUE_TYPE_STRING:
+            dst.string_value = src->string_value ? strdup(src->string_value) : NULL;
+            break;
+    }
+    
+    return dst;
 }
 
 /* csv parsing functions */
@@ -344,6 +424,41 @@ CsvTable* csv_load(const char* filename, CsvConfig config) {
         
         // skip line terminators
         while (ptr < end && (*ptr == '\n' || *ptr == '\r')) ptr++;
+    }
+    
+    // infer column types from data
+    if (table->row_count > 0 && table->column_count > 0) {
+        int sample_size = table->row_count < 20 ? table->row_count : 20;
+        
+        for (int col = 0; col < table->column_count; col++) {
+            // count occurrences of each type
+            int type_counts[5] = {0}; // NULL, INTEGER, DOUBLE, STRING, DATE
+            
+            for (int row = 0; row < sample_size; row++) {
+                if (row < table->row_count && col < table->rows[row].column_count) {
+                    ValueType type = table->rows[row].values[col].type;
+                    if (type >= 0 && type < 5) {
+                        type_counts[type]++;
+                    }
+                }
+            }
+            
+            // determine predominant type (prefer DATE > DOUBLE > INTEGER > STRING > NULL)
+            // ignore NULL values in type inference
+            ValueType inferred = VALUE_TYPE_STRING;
+            
+            if (type_counts[VALUE_TYPE_DATE] > 0) {
+                inferred = VALUE_TYPE_DATE;
+            } else if (type_counts[VALUE_TYPE_DOUBLE] > 0) {
+                inferred = VALUE_TYPE_DOUBLE;
+            } else if (type_counts[VALUE_TYPE_INTEGER] > 0) {
+                inferred = VALUE_TYPE_INTEGER;
+            } else if (type_counts[VALUE_TYPE_STRING] > 0) {
+                inferred = VALUE_TYPE_STRING;
+            }
+            
+            table->columns[col].inferred_type = inferred;
+        }
     }
     
     return table;
@@ -527,6 +642,13 @@ bool csv_save(const char* filename, CsvTable* table) {
                     
                 case VALUE_TYPE_DOUBLE:
                     fprintf(f, "%.15g", val->double_value);
+                    break;
+                    
+                case VALUE_TYPE_DATE:
+                    fprintf(f, "%04d-%02d-%02d",
+                            val->date_value.year,
+                            val->date_value.month,
+                            val->date_value.day);
                     break;
                     
                 case VALUE_TYPE_STRING: {

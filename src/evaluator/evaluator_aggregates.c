@@ -130,6 +130,10 @@ GroupResult* create_groups(Row** rows, int row_count, CsvTable* table, const cha
             case VALUE_TYPE_DOUBLE:
                 snprintf(key_buf, sizeof(key_buf), "%.6f", group_val->double_value);
                 break;
+            case VALUE_TYPE_DATE:
+                snprintf(key_buf, sizeof(key_buf), "%04d-%02d-%02d",
+                         group_val->date_value.year, group_val->date_value.month, group_val->date_value.day);
+                break;
             case VALUE_TYPE_STRING:
                 strncpy(key_buf, group_val->string_value, sizeof(key_buf) - 1);
                 key_buf[sizeof(key_buf) - 1] = '\0';
@@ -194,6 +198,10 @@ GroupResult* create_groups_by_expression(QueryContext* ctx, Row** rows, int row_
                 break;
             case VALUE_TYPE_DOUBLE:
                 snprintf(key_buf, sizeof(key_buf), "%.6f", group_val.double_value);
+                break;
+            case VALUE_TYPE_DATE:
+                snprintf(key_buf, sizeof(key_buf), "%04d-%02d-%02d",
+                         group_val.date_value.year, group_val.date_value.month, group_val.date_value.day);
                 break;
             case VALUE_TYPE_STRING:
                 strncpy(key_buf, group_val.string_value, sizeof(key_buf) - 1);
@@ -643,12 +651,14 @@ ResultSet* build_aggregated_result(QueryContext* ctx, GroupResult* groups, ASTNo
                        it will try exact match first, then strip prefix if needed */
                     
                     /* evaluate aggregate function */
-                    result->rows[g].values[col] = evaluate_aggregate(func_name, group->rows, group->row_count, 
-                                                                     ctx->tables[0].table, col_name);
+                    Value tmp = evaluate_aggregate(func_name, group->rows, group->row_count, 
+                                                   ctx->tables[0].table, col_name);
+                    result->rows[g].values[col] = value_copy(&tmp);
                 } else {
                     /* scalar function - evaluate on first row of the group */
                     if (group->row_count > 0) {
-                        result->rows[g].values[col] = evaluate_column_expression(col_spec, ctx, group->rows[0], NULL, col);
+                        Value tmp = evaluate_column_expression(col_spec, ctx, group->rows[0], NULL, col);
+                        result->rows[g].values[col] = value_copy(&tmp);
                     } else {
                         result->rows[g].values[col].type = VALUE_TYPE_NULL;
                     }
@@ -660,7 +670,8 @@ ResultSet* build_aggregated_result(QueryContext* ctx, GroupResult* groups, ASTNo
                 if (col_node && col_node->type != NODE_TYPE_IDENTIFIER) {
                     /* this is an expression (CASE, function call, etc.) - evaluate it on first row */
                     if (group->row_count > 0) {
-                        result->rows[g].values[col] = evaluate_expression(ctx, col_node, group->rows[0], 0);
+                        Value tmp = evaluate_expression(ctx, col_node, group->rows[0], 0);
+                        result->rows[g].values[col] = value_copy(&tmp);
                     } else {
                         result->rows[g].values[col].type = VALUE_TYPE_NULL;
                     }
@@ -672,12 +683,7 @@ ResultSet* build_aggregated_result(QueryContext* ctx, GroupResult* groups, ASTNo
                         Value* src = &group->rows[0]->values[col_idx];
                         Value* dst = &result->rows[g].values[col];
                         
-                        dst->type = src->type;
-                        if (src->type == VALUE_TYPE_STRING && src->string_value) {
-                            dst->string_value = strdup(src->string_value);
-                        } else {
-                            dst->int_value = src->int_value;
-                        }
+                        value_deep_copy(dst, src);
                     } else {
                         result->rows[g].values[col].type = VALUE_TYPE_NULL;
                     }

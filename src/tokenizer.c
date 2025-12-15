@@ -28,6 +28,8 @@ static bool is_keyword(const char* str) {
         "ALTER", "RENAME", "COLUMN", "ADD", "DROP", "TO",
         "CASE", "WHEN", "THEN", "ELSE", "END",
         "OVER", "PARTITION", "ROW_NUMBER", "RANK", "DENSE_RANK", "LAG", "LEAD",
+        "DATE", "YEAR", "MONTH", "DAY", "DAYOFWEEK", "DAYOFYEAR",
+        "DATE_ADD", "DATE_SUB", "DATE_DIFF", "DATE_FORMAT", "CURRENT_DATE",
         NULL
     };
     

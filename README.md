@@ -426,6 +426,27 @@ LOG(number)                   -- Alias for LN
 MOD(dividend, divisor)        -- Modulo (remainder of division, NULL if divisor is 0)
 ```
 
+#### Date Functions
+```sql
+-- Construction and Formatting
+DATE(year, month, day)        -- Create date from components
+DATE(string)                  -- Parse date from string
+DATE_FORMAT(date, format)     -- Format date ('ISO', 'US', 'EU', 'COMPACT')
+CURRENT_DATE                  -- Current system date (no parentheses)
+
+-- Extraction
+YEAR(date)                    -- Extract year
+MONTH(date)                   -- Extract month (1-12)
+DAY(date)                     -- Extract day (1-31)
+DAYOFWEEK(date)               -- Day of week (0=Sunday, 6=Saturday)
+DAYOFYEAR(date)               -- Day of year (1-366)
+
+-- Arithmetic
+DATE_ADD(date, days)          -- Add days to date
+DATE_SUB(date, days)          -- Subtract days from date
+DATE_DIFF(date1, date2)       -- Days between dates (date1 - date2)
+```
+
 ### Arithmetic Operators
 ```sql
 +    -- Addition
@@ -497,7 +518,255 @@ The engine automatically infers types from CSV data:
 | `INTEGER` | Whole numbers | `42`, `-17`, `0` |
 | `DOUBLE` | Floating point | `3.14`, `-0.5`, `1.23e-4` |
 | `STRING` | Text values | `"Alice"`, `"admin"` |
+| `DATE` | Date values | `2024-12-15`, `12/15/2024`, `15/12/2024` |
 | `NULL` | Missing values | Empty CSV cells |
+
+### Date Type Support
+
+CQ provides comprehensive support for DATE values with automatic type inference, multiple format parsing, and a rich set of date functions.
+
+#### Date Formats
+
+Dates can be parsed in multiple formats:
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| ISO (YYYY-MM-DD) | `2024-12-15` | International standard format |
+| US (MM/DD/YYYY) | `12/15/2024` | American format |
+| EU (DD/MM/YYYY) | `15/12/2024` | European format |
+| Compact (YYYYMMDD) | `20241215` | Compact numeric format |
+
+```sql
+-- All these are valid DATE values:
+SELECT * FROM events.csv WHERE event_date = '2024-12-15'
+SELECT * FROM events.csv WHERE event_date = '12/15/2024'
+SELECT * FROM events.csv WHERE event_date = '15/12/2024'
+SELECT * FROM events.csv WHERE event_date = '20241215'
+```
+
+#### Date Auto-Detection
+
+CSV columns containing date values in YYYY-MM-DD format are automatically detected and treated as DATE type:
+
+```csv
+event_id,event_name,event_date
+1,Conference,2024-06-15
+2,Workshop,2024-07-20
+3,Meetup,2024-08-10
+```
+
+```sql
+-- Dates are automatically parsed from CSV
+SELECT event_name FROM events.csv WHERE event_date > '2024-07-01'
+```
+
+#### Date Functions
+
+**Construction and Formatting:**
+```sql
+DATE(year, month, day)           -- Create a date from components
+DATE('2024-12-15')               -- Parse a date string
+DATE_FORMAT(date, format)        -- Format date ('ISO', 'US', 'EU', 'COMPACT')
+CURRENT_DATE                     -- Current system date (no parentheses)
+```
+
+**Extraction Functions:**
+```sql
+YEAR(date)                       -- Extract year (e.g., 2024)
+MONTH(date)                      -- Extract month (1-12)
+DAY(date)                        -- Extract day of month (1-31)
+DAYOFWEEK(date)                  -- Day of week (0=Sunday, 6=Saturday)
+DAYOFYEAR(date)                  -- Day of year (1-366)
+```
+
+**Date Arithmetic:**
+```sql
+DATE_ADD(date, days)             -- Add days to date
+DATE_SUB(date, days)             -- Subtract days from date
+DATE_DIFF(date1, date2)          -- Days between dates (date1 - date2)
+```
+
+**Date Comparisons:**
+```sql
+-- All standard comparison operators work with dates
+date1 = date2
+date1 != date2
+date1 < date2
+date1 <= date2
+date1 > date2
+date1 >= date2
+
+-- BETWEEN works with dates (inclusive)
+event_date BETWEEN '2024-01-01' AND '2024-12-31'
+```
+
+#### Date Examples
+
+**Basic Date Queries:**
+```sql
+-- Filter by date
+SELECT * FROM events.csv WHERE event_date = '2024-06-15'
+
+-- Date range queries
+SELECT * FROM orders.csv 
+WHERE order_date >= '2024-01-01' 
+  AND order_date < '2024-02-01'
+
+-- BETWEEN with dates
+SELECT * FROM sales.csv 
+WHERE sale_date BETWEEN '2024-Q1-01' AND '2024-03-31'
+
+-- Compare dates
+SELECT event_name, event_date 
+FROM events.csv 
+WHERE event_date > CURRENT_DATE
+```
+
+**Date Extraction:**
+```sql
+-- Extract date components
+SELECT 
+    event_name,
+    event_date,
+    YEAR(event_date) AS year,
+    MONTH(event_date) AS month,
+    DAY(event_date) AS day,
+    DAYOFWEEK(event_date) AS weekday,
+    DAYOFYEAR(event_date) AS day_of_year
+FROM events.csv
+
+-- Group by month
+SELECT 
+    YEAR(sale_date) AS year,
+    MONTH(sale_date) AS month,
+    COUNT(*) AS total_sales,
+    SUM(amount) AS revenue
+FROM sales.csv
+GROUP BY YEAR(sale_date), MONTH(sale_date)
+ORDER BY year, month
+
+-- Filter weekends (Saturday=6, Sunday=0)
+SELECT * FROM events.csv 
+WHERE DAYOFWEEK(event_date) IN (0, 6)
+```
+
+**Date Arithmetic:**
+```sql
+-- Add/subtract days
+SELECT 
+    event_name,
+    event_date,
+    DATE_ADD(event_date, 7) AS one_week_later,
+    DATE_SUB(event_date, 30) AS thirty_days_ago
+FROM events.csv
+
+-- Calculate age of records
+SELECT 
+    event_name,
+    DATE_DIFF(CURRENT_DATE, event_date) AS days_ago
+FROM events.csv
+
+-- Find events in next 30 days
+SELECT * FROM events.csv
+WHERE DATE_DIFF(event_date, CURRENT_DATE) BETWEEN 0 AND 30
+
+-- Days between two dates
+SELECT 
+    order_date,
+    ship_date,
+    DATE_DIFF(ship_date, order_date) AS processing_days
+FROM orders.csv
+```
+
+**Date Formatting:**
+```sql
+-- Format dates for output
+SELECT 
+    event_name,
+    DATE_FORMAT(event_date, 'ISO') AS iso_format,      -- 2024-12-15
+    DATE_FORMAT(event_date, 'US') AS us_format,        -- 12/15/2024
+    DATE_FORMAT(event_date, 'EU') AS eu_format,        -- 15/12/2024
+    DATE_FORMAT(event_date, 'COMPACT') AS compact      -- 20241215
+FROM events.csv
+```
+
+**Creating Dates:**
+```sql
+-- Construct dates from components
+SELECT 
+    event_name,
+    DATE(2024, 12, 15) AS fixed_date,
+    DATE(YEAR(CURRENT_DATE), 1, 1) AS year_start,
+    DATE(YEAR(event_date), MONTH(event_date), 1) AS month_start
+FROM events.csv
+
+-- Parse date strings
+SELECT DATE('2024-12-15') AS parsed_date
+
+-- Using current date
+SELECT 
+    event_name,
+    DATE_DIFF(event_date, CURRENT_DATE) AS days_until
+FROM events.csv
+WHERE event_date > CURRENT_DATE
+ORDER BY days_until
+```
+
+**Complex Date Operations:**
+```sql
+-- Find quarterly reports
+SELECT 
+    YEAR(report_date) AS year,
+    CASE
+        WHEN MONTH(report_date) <= 3 THEN 'Q1'
+        WHEN MONTH(report_date) <= 6 THEN 'Q2'
+        WHEN MONTH(report_date) <= 9 THEN 'Q3'
+        ELSE 'Q4'
+    END AS quarter,
+    COUNT(*) AS report_count
+FROM reports.csv
+GROUP BY year, quarter
+ORDER BY year, quarter
+
+-- Business days calculation (approximate, excludes weekends)
+SELECT 
+    task_name,
+    start_date,
+    end_date,
+    DATE_DIFF(end_date, start_date) AS total_days,
+    DATE_DIFF(end_date, start_date) - 
+        (DATE_DIFF(end_date, start_date) / 7) * 2 AS approx_business_days
+FROM tasks.csv
+
+-- Age in years (approximate)
+SELECT 
+    name,
+    birth_date,
+    DATE_DIFF(CURRENT_DATE, birth_date) / 365 AS age_years
+FROM people.csv
+```
+
+**Date Validation:**
+```sql
+-- Invalid dates are treated as NULL
+SELECT DATE('2024-02-30')  -- Returns NULL (invalid date)
+SELECT DATE('2024-13-01')  -- Returns NULL (invalid month)
+SELECT DATE('2024-00-15')  -- Returns NULL (invalid day)
+
+-- Check for valid dates
+SELECT * FROM events.csv 
+WHERE event_date IS NOT NULL  -- Only valid dates
+```
+
+**Notes:**
+- DATE values are stored internally as year/month/day (12 bytes)
+- Dates are compared chronologically (earlier dates are "less than" later dates)
+- Invalid dates (e.g., Feb 30, Month 13) return NULL
+- DATE functions return NULL for invalid inputs
+- CURRENT_DATE has no parentheses (constant, not a function)
+- Date arithmetic uses days as the unit
+- Year range: -9999 to 9999 (practical range: 1-9999)
+- Leap years are handled correctly
 
 ## CSV Format
 
@@ -954,6 +1223,7 @@ tests/
 ├── test_arithmetic.c           # Arithmetic expressions (22 tests)
 ├── test_create_table.c         # CREATE TABLE operations (8 tests)
 ├── test_csv.c                  # CSV loading and parsing
+├── test_dates.c                # DATE type and functions (14 tests)
 ├── test_distinct.c             # DISTINCT keyword (4 tests)
 ├── test_dml.c                  # INSERT/UPDATE/DELETE operations (8 tests)
 ├── test_evaluator.c            # Query evaluation
@@ -1140,6 +1410,7 @@ make address_sanitizer
 - SQL comments (-- and /* */)
 - CASE expressions (simple and searched)
 - Window functions (ROW_NUMBER, RANK, DENSE_RANK, LAG, LEAD, running aggregates)
+- DATE type support (parsing, formatting, arithmetic, comparisons, SQL functions)
 
 ### Planned Features
 - [ ] Index support for large files
@@ -1149,7 +1420,6 @@ make address_sanitizer
 - [ ] Remote streaming (cq "SELECT * FROM https://website/export.csv WHERE year=2024"; cq "SELECT * FROM s3://bucket/data.csv LIMIT 100")
 - [ ] Interactive REPL (cq --interactive)
 - [ ] Git versioned data query (cq --git HEAD~5 "SELECT * FROM users.csv WHERE active=true")
-- [ ] Date type support
 
 ## 🔗 Additional Resources
 

@@ -4,12 +4,20 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+/* date value structure */
+typedef struct {
+    int year;   // 1000-9999
+    int month;  // 1-12
+    int day;    // 1-31
+} DateValue;
+
 /* data types for CSV values */
 typedef enum {
     VALUE_TYPE_NULL,
     VALUE_TYPE_INTEGER,
     VALUE_TYPE_DOUBLE,
     VALUE_TYPE_STRING,
+    VALUE_TYPE_DATE,
 } ValueType;
 
 /* value structure */
@@ -19,6 +27,7 @@ typedef struct {
         long long int_value;
         double double_value;
         char* string_value;
+        DateValue date_value;
     };
 } Value;
 
@@ -88,5 +97,6 @@ void value_free(Value* value);
 char* value_to_string(Value* value);
 int value_compare(Value* a, Value* b);
 Value parse_value(const char* str, size_t len);
+Value value_copy(const Value* src);  // deep copy a value
 
 #endif

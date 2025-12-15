@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <time.h>
 #include "csv_reader.h"
 #include "evaluator.h"
 #include "string_utils.h"
@@ -245,6 +246,12 @@ void write_csv_file(const char* filename, ResultSet* result, char delimiter) {
                     break;
                 case VALUE_TYPE_DOUBLE:
                     fprintf(f, "%.2f", val->double_value);
+                    break;
+                case VALUE_TYPE_DATE:
+                    fprintf(f, "%04d-%02d-%02d", 
+                            val->date_value.year,
+                            val->date_value.month,
+                            val->date_value.day);
                     break;
                 case VALUE_TYPE_STRING: {
                     // check if string contains delimiter, newline, or quote char

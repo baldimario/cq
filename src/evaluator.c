@@ -137,6 +137,10 @@ ResultSet* evaluate_query_internal(ASTNode* query_ast, Row* outer_row, CsvTable*
                             case VALUE_TYPE_DOUBLE:
                                 snprintf(key_part, sizeof(key_part), "%.6f", val.double_value);
                                 break;
+                            case VALUE_TYPE_DATE:
+                                snprintf(key_part, sizeof(key_part), "%04d-%02d-%02d",
+                                         val.date_value.year, val.date_value.month, val.date_value.day);
+                                break;
                             case VALUE_TYPE_STRING:
                                 strncpy(key_part, val.string_value, sizeof(key_part) - 1);
                                 key_part[sizeof(key_part) - 1] = '\0';
@@ -157,6 +161,10 @@ ResultSet* evaluate_query_internal(ASTNode* query_ast, Row* outer_row, CsvTable*
                                     break;
                                 case VALUE_TYPE_DOUBLE:
                                     snprintf(key_part, sizeof(key_part), "%.6f", val->double_value);
+                                    break;
+                                case VALUE_TYPE_DATE:
+                                    snprintf(key_part, sizeof(key_part), "%04d-%02d-%02d",
+                                             val->date_value.year, val->date_value.month, val->date_value.day);
                                     break;
                                 case VALUE_TYPE_STRING:
                                     strncpy(key_part, val->string_value, sizeof(key_part) - 1);
