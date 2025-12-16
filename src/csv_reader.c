@@ -131,8 +131,6 @@ int value_compare(Value* a, Value* b) {
 
 /* ===== type inference ===== */
 static ValueType infer_type(const char* str, size_t len) {
-    if (len == 0) return VALUE_TYPE_NULL;
-    
     // try to parse as date first (YYYY-MM-DD format)
     if (len >= 8 && len <= 10) {
         char date_str[32];
@@ -524,44 +522,95 @@ Value* csv_get_value_by_name(CsvTable* table, int row_index, const char* col_nam
 
 void csv_print_table(CsvTable* table, int max_rows) {
     if (!table) return;
-    
-    // calculate max column name length for better alignment
-    int max_col_name_len = 0;
-    for (int i = 0; i < table->column_count; i++) {
-        int len = strlen(table->columns[i].name);
-        if (len > max_col_name_len) max_col_name_len = len;
+    // robust table printing: compute per-column widths based on header and sample values
+    if (table->column_count <= 0) return;
+
+    const int MAX_COL_WIDTH = 40; // cap column width to avoid huge columns
+
+    // determine how many rows we'll inspect for width calculation
+    int inspect_rows = (max_rows > 0 && max_rows < table->row_count) ? max_rows : table->row_count;
+
+    // allocate widths
+    int* widths = calloc(table->column_count, sizeof(int));
+    if (!widths) return;
+
+    // initialize with column name lengths
+    for (int c = 0; c < table->column_count; c++) {
+        widths[c] = (int)strlen(table->columns[c].name);
+        if (widths[c] > MAX_COL_WIDTH) widths[c] = MAX_COL_WIDTH;
     }
-    if (max_col_name_len > 20) max_col_name_len = 20;  // cap at 20
-    
+
+    // scan rows (up to inspect_rows) and update widths
+    for (int r = 0; r < inspect_rows; r++) {
+        if (r >= table->row_count) break;
+        for (int c = 0; c < table->column_count; c++) {
+            if (c >= table->rows[r].column_count) continue;
+            char* s = value_to_string(&table->rows[r].values[c]);
+            int len = (int)strlen(s);
+            if (len > MAX_COL_WIDTH) len = MAX_COL_WIDTH;
+            if (len > widths[c]) widths[c] = len;
+            free(s);
+        }
+    }
+
+    // ensure a minimum padding
+    for (int c = 0; c < table->column_count; c++) {
+        if (widths[c] < 3) widths[c] = 3;
+    }
+
     // print header
-    for (int i = 0; i < table->column_count; i++) {
-        printf("%-*s", max_col_name_len + 1, table->columns[i].name);
-        if (i < table->column_count - 1) printf(" | ");
+    for (int c = 0; c < table->column_count; c++) {
+        printf("%-*s", widths[c] + 1, table->columns[c].name);
+        if (c < table->column_count - 1) printf(" | ");
     }
     printf("\n");
-    
-    // print separator
-    for (int i = 0; i < table->column_count; i++) {
-        for (int j = 0; j < max_col_name_len + 1; j++) printf("-");
-        if (i < table->column_count - 1) printf("-+-");
+
+    // print separator line
+    for (int c = 0; c < table->column_count; c++) {
+        for (int k = 0; k < widths[c] + 1; k++) putchar('-');
+        if (c < table->column_count - 1) printf("-+-");
     }
     printf("\n");
-    
+
     // print rows
-    int rows_to_print = (max_rows > 0 && max_rows < table->row_count) ? max_rows : table->row_count;
-    for (int i = 0; i < rows_to_print; i++) {
-        for (int j = 0; j < table->rows[i].column_count && j < table->column_count; j++) {
-            char* str = value_to_string(&table->rows[i].values[j]);
-            printf("%-*s", max_col_name_len + 1, str);
-            free(str);
-            if (j < table->column_count - 1) printf(" | ");
+    int rows_to_print = inspect_rows;
+    for (int r = 0; r < rows_to_print; r++) {
+        for (int c = 0; c < table->column_count; c++) {
+            char* s = NULL;
+            if (r < table->row_count && c < table->rows[r].column_count) {
+                s = value_to_string(&table->rows[r].values[c]);
+            } else {
+                s = strdup("");
+            }
+
+            int len = (int)strlen(s);
+            if (len <= widths[c]) {
+                // print padded
+                printf("%-*s", widths[c] + 1, s);
+            } else {
+                // truncate with ellipsis to exactly fill widths[c] chars, then a single separator space
+                if (widths[c] > 3) {
+                    int keep = widths[c] - 3; // number of chars to keep before '...'
+                    fwrite(s, 1, keep, stdout);
+                    printf("...");
+                    putchar(' ');
+                } else {
+                    // very small column: just print first chars and one space
+                    for (int k = 0; k < widths[c] && k < len; k++) putchar(s[k]);
+                    putchar(' ');
+                }
+            }
+            free(s);
+            if (c < table->column_count - 1) printf(" | ");
         }
         printf("\n");
     }
-    
+
     if (max_rows > 0 && table->row_count > max_rows) {
         printf("... (%d more rows)\n", table->row_count - max_rows);
     }
+
+    free(widths);
 }
 
 void csv_print_table_vertical(CsvTable* table, int max_rows) {
