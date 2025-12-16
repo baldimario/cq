@@ -447,16 +447,16 @@ DATE_DIFF(date1, date2)       -- Days between dates (date1 - date2)
 cq [OPTIONS]
 
 Options:
-  -h              Show help message
-  -q <query>      SQL query to execute (use '-' to read from stdin)
-  -f <file>       Read SQL query from file
-  -o <file>       Write results as CSV to output file
-  -c              Print count of rows
-  -p              Print results as formatted table to stdout
-  -v              Print results in vertical format (one column per line)
-  -s <char>       Field separator for input CSV (default: ',')
-  -d <char>       Output delimiter for -o option (default: ',')
-  -F, --force     Allow DELETE without WHERE clause
+  -h, --help   Show this help message
+  -q <query>   SQL query to execute (use '-' to read from stdin)
+  -f <file>    Read SQL query from file
+  -o <file>    Write result as CSV to output file
+  -c           Print count of rows that match the query
+  -p           Print result as formatted table to stdout
+  -v           Print result in vertical format (one column per line)
+  -s <char>    Field separator for input CSV (default: ',')
+  -d <char>    Output delimiter for -o option (default: ',')
+  -F, --force  Allow DELETE without WHERE clause (dangerous!)
 
 Examples:
   # Print formatted table
@@ -1387,12 +1387,12 @@ make address_sanitizer
 - CASE expressions (simple and searched)
 - Window functions (ROW_NUMBER, RANK, DENSE_RANK, LAG, LEAD, running aggregates)
 - DATE type support (parsing, formatting, arithmetic, comparisons, SQL functions)
+- Output formatter (-O <format> and -p <?format> formats: [csv, table, json, yaml, markdown])
 
 ### Planned Features
 - [ ] Index support for large files
 - [ ] Query optimization
 - [ ] Watch mode (cq --watch "SELECT * FROM access.log WHERE status=500")
-- [ ] Output formatter (cq -o json "SELECT * FROM users.csv" | jq; cq -o yaml "SELECT * FROM config.csv" | yq)
 - [ ] Remote streaming (cq "SELECT * FROM https://website/export.csv WHERE year=2024"; cq "SELECT * FROM s3://bucket/data.csv LIMIT 100")
 - [ ] Interactive REPL (cq --interactive)
 - [ ] Git versioned data query (cq --git HEAD~5 "SELECT * FROM users.csv WHERE active=true")

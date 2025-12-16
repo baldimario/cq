@@ -104,7 +104,9 @@ void print_help(const char* program_name) {
     printf("  -o <file>    Write result as CSV to output file\n");
     printf("  -c           Print count of rows that match the query\n");
     printf("  -p           Print result as formatted table to stdout\n");
+    printf("  -p [format]  Print result to stdout. Optional formats: csv, table, markdown, yaml, json (default: table)\n");
     printf("  -v           Print result in vertical format (one column per line)\n");
+    printf("  -O, --format <format>  When used with -o <file>, write output file in given format (csv, markdown, yaml, json).\n");
     printf("  -s <char>    Field separator for input CSV (default: ',')\n");
     printf("  -d <char>    Output delimiter for -o option (default: ',')\n");
     printf("  -F, --force  Allow DELETE without WHERE clause (dangerous!)\n");

@@ -7,7 +7,10 @@
 #include "parser.h"
 #include "evaluator.h"
 #include "csv_reader.h"
+#include "formats.h"
 #include "utils.h"
+
+
 
 
 int main(int argc, char* argv[]) {
@@ -21,17 +24,20 @@ int main(int argc, char* argv[]) {
     char input_separator = ',';
     char output_delimiter = ',';
     
+    OutputFormat print_format = FMT_AUTO;
+    OutputFormat file_format = FMT_AUTO;
     // long options for --force
     static struct option long_options[] = {
         {"force", no_argument, 0, 'F'},
         {"help", no_argument, 0, 'h'},
+        {"format", required_argument, 0, 'O'},
         {0, 0, 0, 0}
     };
     
     // parse args
     int opt;
     int option_index = 0;
-    while ((opt = getopt_long(argc, argv, "hq:f:o:cps:d:vF", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "hq:f:o:O:cp::s:d:vF", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'h':
                 print_help(argv[0]);
@@ -49,7 +55,26 @@ int main(int argc, char* argv[]) {
                 print_count = true;
                 break;
             case 'p':
+                // optional argument: if provided, set printed format; otherwise default to table
                 print_table = true;
+                if (optarg) {
+                    if (strcasecmp(optarg, "csv") == 0) print_format = FMT_CSV;
+                    else if (strcasecmp(optarg, "table") == 0) print_format = FMT_TABLE;
+                    else if (strcasecmp(optarg, "markdown") == 0 || strcasecmp(optarg, "md") == 0) print_format = FMT_MARKDOWN;
+                    else if (strcasecmp(optarg, "yaml") == 0 || strcasecmp(optarg, "yml") == 0) print_format = FMT_YAML;
+                    else if (strcasecmp(optarg, "json") == 0) print_format = FMT_JSON;
+                } else {
+                    print_format = FMT_TABLE;
+                }
+                break;
+            case 'O':
+                if (optarg) {
+                    if (strcasecmp(optarg, "csv") == 0) file_format = FMT_CSV;
+                    else if (strcasecmp(optarg, "table") == 0) file_format = FMT_TABLE;
+                    else if (strcasecmp(optarg, "markdown") == 0 || strcasecmp(optarg, "md") == 0) file_format = FMT_MARKDOWN;
+                    else if (strcasecmp(optarg, "yaml") == 0 || strcasecmp(optarg, "yml") == 0) file_format = FMT_YAML;
+                    else if (strcasecmp(optarg, "json") == 0) file_format = FMT_JSON;
+                }
                 break;
             case 's':
                 input_separator = optarg[0];
@@ -120,19 +145,28 @@ int main(int argc, char* argv[]) {
         printf("Records: %d\n", result->row_count);
         printf("Columns: %d\n", result->column_count);
     }
+
     
     if (print_table) {
-        if (vertical_output) {
-            csv_print_table_vertical(result, result->row_count);
-        } else {
-            csv_print_table(result, result->row_count);
+        OutputFormat use = print_format;
+        if (use == FMT_AUTO) use = FMT_TABLE;
+        if (use == FMT_JSON) print_json(result);
+        else if (use == FMT_MARKDOWN) print_markdown(result);
+        else if (use == FMT_YAML) print_yaml(result);
+        else {
+            if (vertical_output) csv_print_table_vertical(result, result->row_count);
+            else csv_print_table(result, result->row_count);
         }
     }
-    
+
     if (output_file) {
-        write_csv_file(output_file, result, output_delimiter);
+        OutputFormat fout = file_format;
+        if (fout == FMT_AUTO) fout = FMT_CSV;
+        if (!write_output_file(output_file, result, fout, output_delimiter)) {
+            perror("write_output_file");
+        }
     }
-    
+
     // if no output options specified, default to count
     if (!print_count && !print_table && !output_file) {
         printf("Count: %d\n", result->row_count);
