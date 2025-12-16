@@ -279,8 +279,9 @@ static void parse_line(CsvTable* table, const char* line_start, const char* line
     const char* ptr = line_start;
     int field_count = 0;
     int field_capacity = 16;
+    int field_lengths_capacity = 16;
     char** fields = malloc(sizeof(char*) * field_capacity);
-    size_t* field_lengths = malloc(sizeof(size_t) * field_capacity);
+    size_t* field_lengths = malloc(sizeof(size_t) * field_lengths_capacity);
     
     while (ptr < line_end) {
         // skip leading whitespace
@@ -325,7 +326,7 @@ static void parse_line(CsvTable* table, const char* line_start, const char* line
         
         // store field
         fields = ensure_field_capacity(fields, &field_capacity, field_count, sizeof(char*));
-        field_lengths = ensure_field_capacity(field_lengths, &field_capacity, field_count, sizeof(size_t));
+        field_lengths = ensure_field_capacity(field_lengths, &field_lengths_capacity, field_count, sizeof(size_t));
         
         fields[field_count] = (char*)field_start;
         field_lengths[field_count] = field_len;
@@ -357,14 +358,19 @@ static void parse_line(CsvTable* table, const char* line_start, const char* line
         }
     } else {
         // store data row
+        int col_count = table->column_count > 0 ? table->column_count : field_count;
         Row row;
-        row.column_count = field_count;
-        row.values = malloc(sizeof(Value) * field_count);
-        
-        for (int i = 0; i < field_count; i++) {
-            row.values[i] = parse_value(fields[i], field_lengths[i]);
+        row.column_count = col_count;
+        row.values = malloc(sizeof(Value) * col_count);
+        for (int i = 0; i < col_count; i++) {
+            if (i < field_count) {
+                row.values[i] = parse_value(fields[i], field_lengths[i]);
+            } else {
+                // pad missing columns with NULL
+                row.values[i].type = VALUE_TYPE_NULL;
+                row.values[i].int_value = 0;
+            }
         }
-        
         add_row(table, row);
     }
     

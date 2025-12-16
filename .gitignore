@@ -3,3 +3,4 @@ obj
 build
 output.csv
 .DS_Store
+data/salaries.csv
