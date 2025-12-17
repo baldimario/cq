@@ -114,6 +114,9 @@ endif
 run: $(EXEC)
 	$(EXEC)
 
+debug:
+	$(CC) -g -Wall -W -Iinclude $(SRC_DIR)/*.c -o build/cq_debug
+
 address_sanitizer:
 	$(CC) -g -fsanitize=address -Wall -W -Iinclude $(SRC_DIR)/*.c -o build/cq_debug && ./build/cq_debug ./test_data.csv -p -q 'role "admin" EQ age 25 GT AND' 2>&1
 
