@@ -88,6 +88,12 @@ $(BUILD_DIR)/test_%: $(TEST_DIR)/test_%.c $(LIB_OBJS) | $(BUILD_DIR)
 # Build all tests
 tests: $(TEST_EXECS)
 
+# Build shared library for FFI
+libcq: $(BUILD_DIR)/libcq.so
+
+$(BUILD_DIR)/libcq.so: $(LIB_OBJS) | $(BUILD_DIR)
+	$(CC) -shared $(LIB_OBJS) -o $@ $(LDFLAGS)
+
 # Run all tests
 test: tests
 ifeq ($(OS),Windows_NT)
@@ -123,4 +129,4 @@ address_sanitizer:
 bigdata:
 	python utils/generate_big_dataset.py 1000000
 
-.PHONY: all clean up env down build logs test repl bigdata
+.PHONY: all clean up env down build logs test repl bigdata libcq
