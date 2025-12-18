@@ -20,6 +20,7 @@ else:
 # test builder with new features
 builder = CQBuilder()
 builder.select('name')
+builder.select('age')
 builder.from_(data_path)
 builder.where_like('name', 'A%')
 builder.order_by('age', desc=True)
