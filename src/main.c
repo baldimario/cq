@@ -3,17 +3,49 @@
 #include <string.h>
 #include <stdbool.h>
 #include <getopt.h>
+#include <sys/stat.h>
 #include "tokenizer.h"
 #include "parser.h"
 #include "evaluator.h"
 #include "csv_reader.h"
 #include "formats.h"
 #include "utils.h"
+#include "tui/tui_core.h"
+#include "tui/terminal.h"
 
+static bool is_directory(const char* path) {
+    struct stat statbuf;
+    if (stat(path, &statbuf) != 0) {
+        return false;
+    }
+    return S_ISDIR(statbuf.st_mode);
+}
 
+static bool is_csv_file(const char* path) {
+    size_t len = strlen(path);
+    return len > 4 && strcmp(path + len - 4, ".csv") == 0;
+}
 
+static int run_tui_mode(const char* path, char input_separator) {
+    global_csv_config.delimiter = input_separator;
+    global_csv_config.quote = '"';
+    global_csv_config.has_header = true;
+    
+    const char* workspace_dir = path ? path : ".";
+    
+    TuiApp* app = tui_app_create(workspace_dir);
+    if (!app) {
+        fprintf(stderr, "Error: Failed to create TUI application\n");
+        return 1;
+    }
+    
+    int result = tui_app_run(app);
+    tui_app_destroy(app);
+    
+    return result;
+}
 
-int main(int argc, char* argv[]) {
+static int run_cli_mode(int argc, char* argv[]) {
     char* query = NULL;
     char* query_file = NULL;
     char* output_file = NULL;
@@ -55,7 +87,6 @@ int main(int argc, char* argv[]) {
                 print_count = true;
                 break;
             case 'p':
-                // optional argument: if provided, set printed format; otherwise default to table
                 print_table = true;
                 if (optarg) {
                     if (strcasecmp(optarg, "csv") == 0) print_format = FMT_CSV;
@@ -63,6 +94,26 @@ int main(int argc, char* argv[]) {
                     else if (strcasecmp(optarg, "markdown") == 0 || strcasecmp(optarg, "md") == 0) print_format = FMT_MARKDOWN;
                     else if (strcasecmp(optarg, "yaml") == 0 || strcasecmp(optarg, "yml") == 0) print_format = FMT_YAML;
                     else if (strcasecmp(optarg, "json") == 0) print_format = FMT_JSON;
+                } else if (optind < argc && argv[optind][0] != '-') {
+                    char* next_arg = argv[optind];
+                    if (strcasecmp(next_arg, "csv") == 0) {
+                        print_format = FMT_CSV;
+                        optind++;
+                    } else if (strcasecmp(next_arg, "table") == 0) {
+                        print_format = FMT_TABLE;
+                        optind++;
+                    } else if (strcasecmp(next_arg, "markdown") == 0 || strcasecmp(next_arg, "md") == 0) {
+                        print_format = FMT_MARKDOWN;
+                        optind++;
+                    } else if (strcasecmp(next_arg, "yaml") == 0 || strcasecmp(next_arg, "yml") == 0) {
+                        print_format = FMT_YAML;
+                        optind++;
+                    } else if (strcasecmp(next_arg, "json") == 0) {
+                        print_format = FMT_JSON;
+                        optind++;
+                    } else {
+                        print_format = FMT_TABLE;
+                    }
                 } else {
                     print_format = FMT_TABLE;
                 }
@@ -153,6 +204,24 @@ int main(int argc, char* argv[]) {
         if (use == FMT_JSON) print_json(result);
         else if (use == FMT_MARKDOWN) print_markdown(result);
         else if (use == FMT_YAML) print_yaml(result);
+        else if (use == FMT_CSV) {
+            for (int i = 0; i < result->column_count; i++) {
+                printf("%s", result->columns[i].name);
+                if (i < result->column_count - 1) printf(",");
+            }
+            printf("\n");
+            for (int r = 0; r < result->row_count; r++) {
+                for (int c = 0; c < result->column_count; c++) {
+                    char* val = value_to_string(&result->rows[r].values[c]);
+                    if (val) {
+                        printf("%s", val);
+                        free(val);
+                    }
+                    if (c < result->column_count - 1) printf(",");
+                }
+                printf("\n");
+            }
+        }
         else {
             if (vertical_output) csv_print_table_vertical(result, result->row_count);
             else csv_print_table(result, result->row_count);
@@ -180,4 +249,20 @@ int main(int argc, char* argv[]) {
     }
     
     return 0;
+}
+
+int main(int argc, char* argv[]) {
+    if (argc == 1) {
+        return run_tui_mode(".", ',');
+    }
+    
+    if (argc == 2 && argv[1][0] != '-') {
+        const char* path = argv[1];
+        if (is_directory(path) || is_csv_file(path)) {
+            return run_tui_mode(path, ',');
+        }
+    }
+    
+    optind = 1;
+    return run_cli_mode(argc, argv);
 }

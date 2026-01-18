@@ -9,17 +9,19 @@ INCLUDE_DIR := include
 BUILD_DIR := build
 TEST_DIR := tests
 
-SRCS = $(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/evaluator/*.c) $(wildcard $(SRC_DIR)/parser/*.c)
+SRCS = $(wildcard $(SRC_DIR)/*.c) $(wildcard $(SRC_DIR)/evaluator/*.c) $(wildcard $(SRC_DIR)/parser/*.c) $(wildcard $(SRC_DIR)/tui/*.c)
 # Add external sources for Windows
 ifeq ($(OS),Windows_NT)
     SRCS += $(wildcard $(SRC_DIR)/external/*.c)
 endif
+# Filter out cqtui_main.c since we're integrating TUI into main cq
+SRCS := $(filter-out $(SRC_DIR)/tui/cqtui_main.c, $(SRCS))
 # convert all source paths to object paths
 OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRCS))
 EXEC = $(BUILD_DIR)/cq
 
-# Library objects (everything except main.c)
-LIB_SRCS = $(filter-out $(SRC_DIR)/main.c, $(SRCS))
+# Library objects (everything except main.c and cqtui_main.c)
+LIB_SRCS = $(filter-out $(SRC_DIR)/main.c $(SRC_DIR)/tui/cqtui_main.c, $(SRCS))
 LIB_OBJS = $(LIB_SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
 # Test files
@@ -63,15 +65,22 @@ ifeq ($(OS),Windows_NT)
 endif
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# Rule for TUI sources
+$(OBJ_DIR)/tui/%.o: $(SRC_DIR)/tui/%.c | $(OBJ_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
 $(OBJ_DIR):
 ifeq ($(OS),Windows_NT)
 	@if not exist $(OBJ_DIR) mkdir $(OBJ_DIR)
 	@if not exist $(OBJ_DIR)\\parser mkdir $(OBJ_DIR)\\parser
 	@if not exist $(OBJ_DIR)\\evaluator mkdir $(OBJ_DIR)\\evaluator
+	@if not exist $(OBJ_DIR)\\tui mkdir $(OBJ_DIR)\\tui
 else
 	@mkdir -p $(OBJ_DIR)
 	@mkdir -p $(OBJ_DIR)/parser
 	@mkdir -p $(OBJ_DIR)/evaluator
+	@mkdir -p $(OBJ_DIR)/tui
 endif
 
 $(BUILD_DIR):

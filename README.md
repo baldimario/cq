@@ -11,6 +11,7 @@ A lightweight, fast SQL query processor written in C that enables executing SQL 
 - Getting Started: `doc/GettingStarted.md`
 - Installation: `doc/Installation.md`
 - Command Line Interface: `doc/CLI.md`
+- **TUI (Terminal User Interface)**: `doc/TUI.md`
 - Architecture: `doc/Architecture.md`
 - Testing: `doc/Testing.md`
 - Roadmap: `doc/Roadmap.md`
@@ -20,8 +21,22 @@ A lightweight, fast SQL query processor written in C that enables executing SQL 
 
 Build: `make`
 
+### Command Line
+
 Run a sample query:
 `./build/cq -q "SELECT name, age FROM 'data.csv' WHERE age > 25" -p`
+
+### Terminal UI
+
+Launch interactive TUI:
+`./build/cqtui data/`
+
+Features:
+- Browse and open CSV files as tables
+- Execute SQL queries interactively
+- Multi-tab interface for multiple tables
+- Keyboard-driven navigation
+- No external dependencies
 
 ## Example SQL Files
 
