@@ -218,6 +218,35 @@ char* read_query_from_stdin(void) {
     return query;
 }
 
+/* write a conditionally quoted string to file */
+static void write_quoted_str(FILE* f, const char* str, const char delimiter) {
+    // check if string contains delimiter, newline, or quote char
+    bool needs_quoting = false;
+    if (str) {
+        for (const char* p = str; *p; p++) {
+            if (*p == delimiter || *p == '"' || *p == '\n' || *p == '\r') {
+                needs_quoting = true;
+                break;
+            }
+        }
+    }
+    
+    if (needs_quoting) {
+        fprintf(f, "\"");
+        // escape quotes by doubling them
+        for (const char* p = str; *p; p++) {
+            if (*p == '"') {
+                fprintf(f, "\"\"");
+            } else {
+                fprintf(f, "%c", *p);
+            }
+        }
+        fprintf(f, "\"");
+    } else {
+        fprintf(f, "%s", str ? str : "");
+    }
+}
+
 /* wsrite ResultSet to CSV file */
 void write_csv_file(const char* filename, ResultSet* result, char delimiter) {
     FILE* f = fopen(filename, "w");
@@ -229,7 +258,7 @@ void write_csv_file(const char* filename, ResultSet* result, char delimiter) {
     // header
     for (int i = 0; i < result->column_count; i++) {
         if (i > 0) fprintf(f, "%c", delimiter);
-        fprintf(f, "%s", result->columns[i].name);
+        write_quoted_str(f, result->columns[i].name, delimiter);
     }
     fprintf(f, "\n");
     
@@ -255,34 +284,9 @@ void write_csv_file(const char* filename, ResultSet* result, char delimiter) {
                             val->date_value.month,
                             val->date_value.day);
                     break;
-                case VALUE_TYPE_STRING: {
-                    // check if string contains delimiter, newline, or quote char
-                    bool needs_quoting = false;
-                    if (val->string_value) {
-                        for (const char* p = val->string_value; *p; p++) {
-                            if (*p == delimiter || *p == '"' || *p == '\n' || *p == '\r') {
-                                needs_quoting = true;
-                                break;
-                            }
-                        }
-                    }
-                    
-                    if (needs_quoting) {
-                        fprintf(f, "\"");
-                        // escape quotes by doubling them
-                        for (const char* p = val->string_value; *p; p++) {
-                            if (*p == '"') {
-                                fprintf(f, "\"\"");
-                            } else {
-                                fprintf(f, "%c", *p);
-                            }
-                        }
-                        fprintf(f, "\"");
-                    } else {
-                        fprintf(f, "%s", val->string_value ? val->string_value : "");
-                    }
+                case VALUE_TYPE_STRING:
+                    write_quoted_str(f, val->string_value, delimiter);
                     break;
-                }
             }
         }
         fprintf(f, "\n");
